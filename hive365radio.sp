@@ -6,7 +6,7 @@
 new const String:g_szRadioUrl[] = "http://hive365.co.uk/plugin/player/";
 new const String:PLUGIN_VERSION[] = "3.0.1";
 new const DEFAULT_VOLUME = 20;
-new const String:szSearch[][] = {"\\x26amp;", "\\"};
+new const String:szSearch[][] = {"&amp;", "\\"};
 new const String:szReplace[][] = {"&", ""};
 
 

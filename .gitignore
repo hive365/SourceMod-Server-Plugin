@@ -7,3 +7,11 @@
 
 # Binaries
 *.smx
+*.inc
+*.so
+*.dll
+*.exe
+*.zip
+*.tpl
+*.dat
+/addons*
