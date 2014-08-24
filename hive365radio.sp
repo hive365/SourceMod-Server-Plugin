@@ -4,7 +4,7 @@
 #include <base64>
 
 new const String:g_szRadioUrl[] = "http://hive365.co.uk/plugin/player/";
-new const String:PLUGIN_VERSION[] = "3.0.1";
+new const String:PLUGIN_VERSION[] = "3.0.3";
 new const DEFAULT_VOLUME = 20;
 new const String:szSearch[][] = {"&amp;", "\\"};
 new const String:szReplace[][] = {"&", ""};
