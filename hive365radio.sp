@@ -1,38 +1,51 @@
 #include <sourcemod>
-#include <regex>
 #include <socket>
 #include <base64>
+#include <json>
 
-new const String:g_szRadioUrl[] = "http://hive365.co.uk/plugin/player/";
-new const String:PLUGIN_VERSION[] = "3.0.3";
-new const DEFAULT_VOLUME = 20;
-new const String:szSearch[][] = {"&amp;", "\\"};
-new const String:szReplace[][] = {"&", ""};
+#pragma semicolon 1
+#pragma newdecls required
+
+//Defines
+#define PLUGIN_VERSION	"4.0.0"
+char RADIO_PLAYER_URL[] = "http://hive365.co.uk/plugin/player/";
+#define DEFAULT_RADIO_VOLUME 20
+
+//Timer defines
+#define INFO_REFRESH_RATE 30.0
+#define HIVE_ADVERT_RATE 600.0
+#define HELP_TIMER_DELAY 15.0
 
 
-new bool:bIsTunedIn[MAXPLAYERS+1] = {false, ...};
-new Handle:hHelpMenu = INVALID_HANDLE;
-new Handle:hVolumeMenu = INVALID_HANDLE;
-new Handle:hRadioTunedMenu = INVALID_HANDLE;
-new Handle:hEnabled = INVALID_HANDLE;
-new String:szCurrentDJ[64] = "";
-new String:szCurrentSong[256] = "";
-new Handle:hRegexSong;
-new Handle:hRegexDJ;
-new const Float:fRefresh = 30.0;
-new Handle:hReqTrie = INVALID_HANDLE;
-new Handle:hShoutTrie = INVALID_HANDLE;
-new Handle:hRateTrie = INVALID_HANDLE;
-new Handle:hFTWTrie = INVALID_HANDLE;
-new Handle:hHostname = INVALID_HANDLE;
-new String:szEncodedHost[256];
+//Menu Handles
+Menu menuHelp;
+Menu menuVolume;
+Menu menuTuned;
 
+//Tracked Information
+char szEncodedHostname[256];
+char szEncodedHostPort[16];
+char szCurrentSong[64];
+char szCurrentDJ[64];
+bool bIsTunedIn[MAXPLAYERS+1];
+
+//CVars
+ConVar convarEnabled;
+
+//Voting Trie's
+StringMap stringmapRate;
+StringMap stringmapRequest;
+StringMap stringmapShoutout;
+StringMap stringmapDJFTW;
+
+//enum's
 enum RadioOptions
 {
 	Radio_Volume,
 	Radio_Off,
 	Radio_Help,
 };
+
 enum SocketInfo
 {
 	SocketInfo_Info,
@@ -41,9 +54,10 @@ enum SocketInfo
 	SocketInfo_Choon,
 	SocketInfo_Poon,
 	SocketInfo_DjFtw,
+	SocketInfo_HeartBeat,
 };
 
-public Plugin:myinfo = 
+public Plugin myinfo = 
 {
 	name = "Hive365 Player",
 	author = "Hive365.co.uk",
@@ -52,13 +66,13 @@ public Plugin:myinfo =
 	url = "http://www.hive365.co.uk"
 }
 
-public OnPluginStart()
+public void OnPluginStart()
 {
-	hReqTrie = CreateTrie();
-	hShoutTrie = CreateTrie();
-	hRateTrie = CreateTrie();
-	hFTWTrie = CreateTrie();
-	
+	stringmapRate = new StringMap();
+	stringmapRequest = new StringMap();
+	stringmapShoutout = new StringMap();
+	stringmapDJFTW = new StringMap();
+
 	RegConsoleCmd("sm_radio", Cmd_RadioMenu);
 	RegConsoleCmd("sm_radiohelp", Cmd_RadioHelp);
 	RegConsoleCmd("sm_dj", Cmd_DjInfo);
@@ -73,342 +87,371 @@ public OnPluginStart()
 	RegConsoleCmd("sm_sh", Cmd_Shoutout);
 	RegConsoleCmd("sm_djftw", Cmd_DjFtw);
 	
-	hEnabled = CreateConVar("sm_hive365radio_enabled", "1", "Enable the radio?", _, true, 0.0, true, 1.0);
-	CreateConVar("sm_hive365radio_version", PLUGIN_VERSION, "Hive365 Radio Plugin Version", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
+	convarEnabled = CreateConVar("sm_hive365radio_enabled", "1", "Enable the radio?", _, true, 0.0, true, 1.0);
+	CreateConVar("sm_hive365radio_version", PLUGIN_VERSION, "Hive365 Radio Plugin Version", FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_DONTRECORD);
 	AutoExecConfig();
 	
-	hRadioTunedMenu = CreateMenu(RadioTunedMenuHandle);
-	SetMenuTitle(hRadioTunedMenu, "Radio Options");
-	AddMenuItem(hRadioTunedMenu, "0", "Adjust Volume");
-	AddMenuItem(hRadioTunedMenu, "1", "Stop Radio");
-	AddMenuItem(hRadioTunedMenu, "2", "Radio Help");
-	SetMenuExitButton(hRadioTunedMenu, true);
+	menuTuned = new Menu(RadioTunedMenuHandle);
+	menuTuned.SetTitle("Radio Options");
+	menuTuned.AddItem("0", "Adjust Volume");
+	menuTuned.AddItem("1", "Stop Radio");
+	menuTuned.AddItem("2", "Radio Help");
+	menuTuned.ExitButton = true;
 	
-	hVolumeMenu = CreateMenu(RadioVolumeMenuHandle);
-	SetMenuTitle(hVolumeMenu, "Volume Options");
-	AddMenuItem(hVolumeMenu, "1", "Volume: 1%");
-	AddMenuItem(hVolumeMenu, "5", "Volume: 5%");
-	AddMenuItem(hVolumeMenu, "10", "Volume: 10%");
-	AddMenuItem(hVolumeMenu, "20", "Volume: 20% (default)");
-	AddMenuItem(hVolumeMenu, "30", "Volume: 30%");
-	AddMenuItem(hVolumeMenu, "40", "Volume: 40%");
-	AddMenuItem(hVolumeMenu, "50", "Volume: 50%");
-	AddMenuItem(hVolumeMenu, "75", "Volume: 75%");
-	AddMenuItem(hVolumeMenu, "100", "Volume: 100%");
-	SetMenuExitButton(hVolumeMenu, true);
+	menuVolume = new Menu(RadioVolumeMenuHandle);
+	menuVolume.SetTitle("Radio Options");
+	menuVolume.AddItem("1", "Volume: 1%");
+	menuVolume.AddItem("5", "Volume: 5%");
+	menuVolume.AddItem("10", "Volume: 10%");
+	menuVolume.AddItem("20", "Volume: 20% (default)");
+	menuVolume.AddItem("30", "Volume: 30%");
+	menuVolume.AddItem("40", "Volume: 40%");
+	menuVolume.AddItem("50", "Volume: 50%");
+	menuVolume.AddItem("75", "Volume: 75%");
+	menuVolume.AddItem("100", "Volume: 100%");
+	if(GetEngineVersion() != Engine_CSGO)// We could remove one for csgo maybe
+	{
+		menuVolume.Pagination = MENU_NO_PAGINATION;
+	}
+	menuVolume.ExitButton = true;
 	
-	hHelpMenu = CreateMenu(HelpMenuHandle);
-	SetMenuTitle(hHelpMenu, "Radio Help");
-	AddMenuItem(hHelpMenu, "0", "Type sm_radio in console (!radio in chat) to tune in");
-	AddMenuItem(hHelpMenu, "1", "Type sm_dj in console (!dj in chat) to get dj info");
-	AddMenuItem(hHelpMenu, "2", "Type sm_song in console (!song in chat) to get the song info");
-	AddMenuItem(hHelpMenu, "3", "Type sm_choon in console (!choon in chat) to like a song");
-	AddMenuItem(hHelpMenu, "4", "Type sm_poon in console (!poon in chat) to dislike a song");
-	AddMenuItem(hHelpMenu, "-1", "Type sm_request song name in console (!request song name in chat) to request a song");
-	AddMenuItem(hHelpMenu, "-1", "Type sm_shoutout shoutout in console (!shoutout shoutout in chat) to request a shoutout");
-	AddMenuItem(hHelpMenu, "-1", "NOTE: You must have HTML MOTD enabled!");
-	SetMenuExitButton(hHelpMenu, true);
+	menuHelp = new Menu(HelpMenuHandle);
+	menuHelp.SetTitle("Radio Help");
+	menuHelp.AddItem("0", "Type !radio in chat to tune in");
+	menuHelp.AddItem("1", "Type !dj in chat to get dj info");
+	menuHelp.AddItem("2", "Type !song in chat to get the song info");
+	menuHelp.AddItem("3", "Type !choon in chat if you like a song");
+	menuHelp.AddItem("4", "Type !poon in chat if you dislike a song");
+	menuHelp.AddItem("-1", "Type !request song name in chat to request a song");
+	menuHelp.AddItem("-1", "Type !shoutout shoutout in chat to request a shoutout");
+	menuHelp.AddItem("-1", "NOTE: You must have HTML MOTD enabled!");
+	menuHelp.Pagination = MENU_NO_PAGINATION;
+	menuHelp.ExitButton = true;
 	
-	hRegexDJ = CompileRegex("(.*)(\"title\")(.*?)\"(.*?)\",\"");
-	hRegexSong = CompileRegex("(.*)(\"artist_song\")(.*?)\"(.*?)\"}");
-	MakeSocketRequest(SocketInfo_Info, 0, "");
-	CreateTimer(fRefresh, GetStreamInfoTimer, _, TIMER_REPEAT);
+	ConVar hostname = FindConVar("hostname");
 	
-	CreateTimer(300.0, ShowAdvert, _, TIMER_REPEAT);
-	hHostname = FindConVar("hostname");
+	if(hostname)
+	{
+		char szHostname[128];
+		hostname.GetString(szHostname, sizeof(szHostname));
+		EncodeBase64(szEncodedHostname, sizeof(szEncodedHostname), szHostname);
+		hostname.AddChangeHook(HookHostnameChange);
+	}
+	
+	char szPort[10];
+	FindConVar("hostport").GetString(szPort, sizeof(szPort));
+	EncodeBase64(szEncodedHostPort, sizeof(szEncodedHostPort), szPort);
+	
+	ConVar showInfo = FindConVar("host_info_show");//CS:GO Only... for now
+	if(showInfo)
+	{
+		if(showInfo.IntValue < 1)
+		{
+			showInfo.IntValue = 1;
+		}
+		showInfo.AddChangeHook(HookShowInfo);
+	}
+	
+	MakeSocketRequest(SocketInfo_Info);
+	
+	CreateTimer(HIVE_ADVERT_RATE, ShowAdvert, _, TIMER_REPEAT);
+	CreateTimer(INFO_REFRESH_RATE, GetStreamInfoTimer, _, TIMER_REPEAT);
+	
+	for(int i = 0; i <= MaxClients; i++){bIsTunedIn[i] = false;}
 }
-public OnConfigsExecuted()
+
+public void OnMapStart()
 {
-	decl String:encodedhost[256];
-	GetConVarString(hHostname, encodedhost, sizeof(encodedhost));
-	EncodeBase64(szEncodedHost, sizeof(szEncodedHost), encodedhost);
-	ClearTrie(hReqTrie);
-	ClearTrie(hShoutTrie);
-	ClearTrie(hRateTrie);
+	stringmapRate.Clear();
+	stringmapRequest.Clear();
+	stringmapShoutout.Clear();
+	stringmapDJFTW.Clear();
+	MakeSocketRequest(SocketInfo_HeartBeat);
 }
-public Action:GetStreamInfoTimer(Handle:timer)
+
+public void OnClientDisconnect(int client)
 {
-	MakeSocketRequest(SocketInfo_Info, 0, "");
+	bIsTunedIn[client] = false;
 }
-public Action:ShowAdvert(Handle:timer)
+
+public void OnClientPutInServer(int client)
 {
-	for(new i = 1; i <= MaxClients; i++)
+	int serial = GetClientSerial(client);
+	bIsTunedIn[client] = false;
+	CreateTimer(HELP_TIMER_DELAY, HelpMessage, serial, TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public void HookHostnameChange(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+	EncodeBase64(szEncodedHostname, sizeof(szEncodedHostname), newValue);
+}
+
+public void HookShowInfo(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+	if(convar.IntValue < 1)
+	{
+		convar.IntValue = 1;
+	}
+}
+
+//Timer Handlers
+public Action GetStreamInfoTimer(Handle timer)
+{
+	MakeSocketRequest(SocketInfo_Info);
+}
+
+public Action ShowAdvert(Handle timer)
+{	
+	for(int i = 1; i <= MaxClients; i++)
 	{
 		if(IsClientInGame(i) && !bIsTunedIn[i])
 		{
-			PrintToChat(i, "\x01 \x04[Hive365] This server is running Hive365 Radio type !radiohelp for Help!");
+			PrintToChat(i, "\x01[\x04Hive365\x01] \x04This server is running Hive365 Radio type !radiohelp for Help!");
 		}
 	}
 }
-public OnClientDisconnect(client)
+
+public Action HelpMessage(Handle timer, any serial)
 {
-	bIsTunedIn[client] = false;
-}
-public OnClientPutInServer(client)
-{
-	new serial = GetClientSerial(client);
-	bIsTunedIn[client] = false;
-	CreateTimer(15.0, HelpMessage, serial, TIMER_FLAG_NO_MAPCHANGE);
-}
-public Action:HelpMessage(Handle:timer, any:serial)
-{
-	new client = GetClientFromSerial(serial);
+	int client = GetClientFromSerial(serial);
 	if(client > 0 && client <= MaxClients && IsClientInGame(client))
 	{
-		PrintToChat(client, "\x01 \x04[Hive365] This server is running Hive365 Radio type !radiohelp for Help!");
+		PrintToChat(client, "\x01[\x04Hive365\x01] \x04This server is running Hive365 Radio type !radiohelp for Help!");
 	}
 	
 	return Plugin_Continue;
 }
-public Action:Cmd_DjFtw(client, args)
-{
-	if(client == 0  || !IsClientInGame(client))
-		return Plugin_Handled;
-	
-	decl String:steamid[32];
-	
-	if(!GetClientAuthString(client, steamid, sizeof(steamid)))
-		return Plugin_Handled;
-	
-	new value;
-	
-	if(GetTrieValue(hFTWTrie, steamid, value))
-	{
-		ReplyToCommand(client, "\x01 \x04[Hive365] You have already rated this DJFTW!");
-		return Plugin_Handled;
-	}
-	
-	SetTrieValue(hFTWTrie, steamid, 1, true);
-	MakeSocketRequest(SocketInfo_DjFtw, GetClientSerial(client), "");
-	
-	return Plugin_Handled;
-}
-public Action:Cmd_Shoutout(client, args)
-{
-	if(client == 0  || !IsClientInGame(client))
-		return Plugin_Handled;
-	
-	if(args <= 0)
-	{
-		ReplyToCommand(client, "\x01 \x04[Hive365] sm_shoutout <shoutout> or !shoutout <shoutout>");
-		return Plugin_Handled;
-	}
-	
-	decl String:steamid[32];
-	
-	if(!GetClientAuthString(client, steamid, sizeof(steamid)))
-		return Plugin_Handled;
-	
-	new Float:value;
-	
-	if(GetTrieValue(hShoutTrie, steamid, value) && value+(3*60) > GetEngineTime())
-	{
-		ReplyToCommand(client, "\x01 \x04[Hive365] Please wait a few minutes between Shoutouts.");
-		return Plugin_Handled;
-	}
-	
-	SetTrieValue(hShoutTrie, steamid, GetEngineTime());
-	
-	decl String:buffer[128];
-	GetCmdArgString(buffer, sizeof(buffer));
-	
-	if(strlen(buffer) > 3)
-		MakeSocketRequest(SocketInfo_Shoutout, GetClientSerial(client), buffer);
-	
-	return Plugin_Handled;
-}
-public Action:Cmd_Choon(client, args)
-{
-	if(client == 0  || !IsClientInGame(client))
-		return Plugin_Handled;
-	
-	decl String:steamid[32];
-	
-	if(!GetClientAuthString(client, steamid, sizeof(steamid)))
-		return Plugin_Handled;
-	
-	new Float:value;
-	
-	if(GetTrieValue(hRateTrie, steamid, value) && value+(3*60) > GetEngineTime())
-	{
-		ReplyToCommand(client, "\x01 \x04[Hive365] Please wait a few minutes between Choons and Poons");
-		return Plugin_Handled;
-	}
-	
-	SetTrieValue(hRateTrie, steamid, GetEngineTime());
-	
-	PrintToChatAll("\x01 \x04[Hive365] %N thinks that %s is a banging Choon!", client, szCurrentSong);
-	MakeSocketRequest(SocketInfo_Choon, GetClientSerial(client), "");
-	return Plugin_Handled;
-}
-public Action:Cmd_Poon(client, args)
-{
-	if(client == 0  || !IsClientInGame(client))
-		return Plugin_Handled;
-	
-	decl String:steamid[32];
 
-	if(!GetClientAuthString(client, steamid, sizeof(steamid)))
-		return Plugin_Handled;
-	
-	new Float:value;
-	
-	if(GetTrieValue(hRateTrie, steamid, value) && value+(3*60) > GetEngineTime())
+//Command Handlers
+public Action Cmd_DjFtw(int client, int args)
+{
+	if(client == 0 || !IsClientInGame(client))
 	{
-		ReplyToCommand(client, "\x01 \x04[Hive365] Please wait a few minutes between Choons and Poons");
 		return Plugin_Handled;
 	}
 	
-	SetTrieValue(hRateTrie, steamid, GetEngineTime());
+	if(!HandleSteamIDTracking(stringmapDJFTW, client))
+	{
+		ReplyToCommand(client, "\x01[\x04Hive365\x01] \x04You have already rated this DJFTW!");
+		return Plugin_Handled;
+	}
 	
-	PrintToChatAll("\x01 \x04[Hive365] %N thinks that %s  is a bit of a naff Poon!", client, szCurrentSong);
-	MakeSocketRequest(SocketInfo_Poon, GetClientSerial(client), "");
+	MakeSocketRequest(SocketInfo_DjFtw, GetClientSerial(client));
+	
 	return Plugin_Handled;
 }
-public Action:Cmd_Request(client, args)
+
+public Action Cmd_Shoutout(int client, int args)
 {
-	if(client == 0  || !IsClientInGame(client))
+	if(client == 0 || !IsClientInGame(client))
+	{
 		return Plugin_Handled;
+	}
 	
 	if(args <= 0)
 	{
-		ReplyToCommand(client, "\x01 \x04[Hive365] sm_request <request> or !request <request>");
+		ReplyToCommand(client, "\x01[\x04Hive365\x01] \x04sm_shoutout <shoutout> or !shoutout <shoutout>");
 		return Plugin_Handled;
 	}
 	
-	decl String:steamid[32];
-	
-	if(!GetClientAuthString(client, steamid, sizeof(steamid)))
-		return Plugin_Handled;
-	
-	new Float:value;
-	
-	if(GetTrieValue(hReqTrie, steamid, value) && value+(3*60) > GetEngineTime())
+	if(!HandleSteamIDTracking(stringmapShoutout, client, true, 10))
 	{
-		ReplyToCommand(client, "\x01 \x04[Hive365] Please wait a few minutes between Requests");
+		ReplyToCommand(client, "\x01[\x04Hive365\x01] \x04Please wait a few minutes between Shoutouts.");
 		return Plugin_Handled;
 	}
 	
-	SetTrieValue(hReqTrie, steamid, GetEngineTime());
-	
-	decl String:buffer[128];
+	char buffer[128];
 	GetCmdArgString(buffer, sizeof(buffer));
 	
 	if(strlen(buffer) > 3)
-		MakeSocketRequest(SocketInfo_Request, GetClientSerial(client), buffer);
+	{
+		MakeSocketRequest(SocketInfo_Shoutout, GetClientSerial(client), buffer);
+	}
 	
 	return Plugin_Handled;
 }
-public Action:Cmd_RadioHelp(client, args)
+
+public Action Cmd_Choon(int client, int args)
+{
+	if(client == 0 || !IsClientInGame(client))
+	{
+		return Plugin_Handled;
+	}
+	
+	if(!HandleSteamIDTracking(stringmapRate, client, true, 5))
+	{
+		ReplyToCommand(client, "\x01[\x04Hive365\x01] \x04Please wait a few minutes between Choons and Poons");
+		return Plugin_Handled;
+	}
+	
+	PrintToChatAll("\x01[\x04Hive365\x01] \x04%N thinks that %s is a banging Choon!", client, szCurrentSong);
+	
+	MakeSocketRequest(SocketInfo_Choon, GetClientSerial(client));
+	
+	return Plugin_Handled;
+}
+
+public Action Cmd_Poon(int client, int args)
+{
+	if(client == 0 || !IsClientInGame(client))
+	{
+		return Plugin_Handled;
+	}
+	
+	if(!HandleSteamIDTracking(stringmapRate, client, true, 5))
+	{
+		ReplyToCommand(client, "\x01[\x04Hive365\x01] \x04Please wait a few minutes between Choons and Poons");
+		return Plugin_Handled;
+	}
+	
+	PrintToChatAll("\x01[\x04Hive365\x01] \x04%N thinks that %s  is a bit of a naff Poon!", client, szCurrentSong);
+	
+	MakeSocketRequest(SocketInfo_Poon, GetClientSerial(client));
+	
+	return Plugin_Handled;
+}
+
+public Action Cmd_Request(int client, int args)
+{
+	if(client == 0 || !IsClientInGame(client))
+	{
+		return Plugin_Handled;
+	}
+	
+	if(args <= 0)
+	{
+		ReplyToCommand(client, "\x01[\x04Hive365\x01] \x04sm_request <request> or !request <request>");
+		return Plugin_Handled;
+	}
+	
+	if(!HandleSteamIDTracking(stringmapRequest, client, true, 10))
+	{
+		ReplyToCommand(client, "\x01[\x04Hive365\x01] \x04Please wait a few minutes between Requests");
+		return Plugin_Handled;
+	}
+	
+	char buffer[128];
+	GetCmdArgString(buffer, sizeof(buffer));
+	
+	if(strlen(buffer) > 3)
+	{
+		MakeSocketRequest(SocketInfo_Request, GetClientSerial(client), buffer);
+	}
+	
+	return Plugin_Handled;
+}
+
+public Action Cmd_RadioHelp(int client, int args)
 {
 	if(client > 0 && client <= MaxClients && IsClientInGame(client))
 	{
-		DisplayMenu(hHelpMenu, client, 30);
+		menuHelp.Display(client, 30);
 	}
+	
 	return Plugin_Handled;
 }
-public Action:Cmd_RadioMenu(client, args)
+
+public Action Cmd_RadioMenu(int client, int args)
 {
 	if(client > 0 && client <= MaxClients && IsClientInGame(client))
 	{
 		DisplayRadioMenu(client);
 	}
+	
 	return Plugin_Handled;
 }
-public Action:Cmd_SongInfo(client, args)
+
+public Action Cmd_SongInfo(int client, int args)
 {
 	if(client == 0 || !IsClientInGame(client))
+	{
 		return Plugin_Handled;
+	}
 		
-	ReplyToCommand(client, "\x01 \x04[Hive365] Current Song is: %s", szCurrentSong);
+	ReplyToCommand(client, "\x01[\x04Hive365\x01] \x04Current Song is: %s", szCurrentSong);
 	
 	return Plugin_Handled;
 }
-public Action:Cmd_DjInfo(client, args)
+
+public Action Cmd_DjInfo(int client, int args)
 {
-	if(client == 0  || !IsClientInGame(client))
+	if(client == 0 || !IsClientInGame(client))
+	{
 		return Plugin_Handled;
+	}
 		
-	ReplyToCommand(client, "\x01 \x04[Hive365] Your DJ is: %s", szCurrentDJ);
+	ReplyToCommand(client, "\x01[\x04Hive365\x01] \x04Your DJ is: %s", szCurrentDJ);
 	
 	return Plugin_Handled;
 }
-DisplayRadioMenu(client)
-{
-	if(GetConVarBool(hEnabled))
-	{
-		if(!bIsTunedIn[client])
-		{
-			decl String:szURL[sizeof(g_szRadioUrl) + 15];
-			Format(szURL, sizeof(szURL), "%s?volume=%i", g_szRadioUrl, DEFAULT_VOLUME);
-			LoadMOTDPanel(client, "Hive365", szURL, false);
-			bIsTunedIn[client] = true;
-		}
-		DisplayMenu(hRadioTunedMenu, client, 30);
-	}
-	else
-	{
-		PrintToChat(client, "\x01 \x04[Hive365] Hive365 is currently disabled");
-	}
-}
-public RadioTunedMenuHandle(Handle:menu, MenuAction:action, client, option)
+
+//Menu Handlers
+public int RadioTunedMenuHandle(Menu menu, MenuAction action, int client, int option)
 {
 	if(action == MenuAction_Select && IsClientInGame(client))
 	{
-		new String:radiooption[32];
-		if(!GetMenuItem(menu, option, radiooption, sizeof(radiooption)))
+		char radiooption[3];
+		if(!menu.GetItem(option, radiooption, sizeof(radiooption)))
 		{
-			PrintToChat(client, "\x01 \x04[Hive365] Unknown option selected");
+			PrintToChat(client, "\x01[\x04Hive365\x01] \x04Unknown option selected");
 		}
-		switch(RadioOptions:StringToInt(radiooption))
+		switch(view_as<RadioOptions>(StringToInt(radiooption)))
 		{
 			case Radio_Volume:
 			{
-				DisplayMenu(hVolumeMenu, client, 30);
+				menuVolume.Display(client, 30);
 			}
 			case Radio_Off:
 			{
 				if(bIsTunedIn[client])
 				{
-					PrintToChat(client, "\x01 \x04[Hive365] Radio has been turned off. Thanks for listening!");
+					PrintToChat(client, "\x01[\x04Hive365\x01] \x04Radio has been turned off. Thanks for listening!");
+					
 					LoadMOTDPanel(client, "Thanks for listening", "about:blank", false);
+					
 					bIsTunedIn[client] = false;
 				}
 			}
 			case Radio_Help:
 			{
-				DisplayMenu(hHelpMenu, client, 30);
+				menuHelp.Display(client, 30);
 			}
 		}
 	}
 }
-public RadioVolumeMenuHandle(Handle:menu, MenuAction:action, client, option)
+
+public int RadioVolumeMenuHandle(Menu menu, MenuAction action, int client, int option)
 {
 	if(action == MenuAction_Select && IsClientInGame(client))
 	{
-		new String:szVolume[10];
-		if(!GetMenuItem(menu, option, szVolume, sizeof(szVolume)))
-		{
-			PrintToChat(client, "\x01 \x04[Hive365] Unknown option selected.");
-		}
-		new volume = StringToInt(szVolume);
+		char szVolume[10];
 		
-		decl String:szURL[sizeof(g_szRadioUrl) + 15];
-		Format(szURL, sizeof(szURL), "%s?volume=%i", g_szRadioUrl, volume);
+		if(!menu.GetItem(option, szVolume, sizeof(szVolume)))
+		{
+			PrintToChat(client, "\x01[\x04Hive365\x01] \x04Unknown option selected.");
+		}
+		
+		char szURL[sizeof(RADIO_PLAYER_URL) + 15];
+		
+		Format(szURL, sizeof(szURL), "%s?volume=%s", RADIO_PLAYER_URL, szVolume);
+	
 		LoadMOTDPanel(client, "Hive365", szURL, false);
+		
 		bIsTunedIn[client] = true;
 	}
 }
-public HelpMenuHandle(Handle:menu, MenuAction:action, client, item)
+
+public int HelpMenuHandle(Menu menu, MenuAction action, int client, int option)
 {
 	if(action == MenuAction_Select && IsClientInGame(client))
 	{
-		new String:option[32];
-		if(!GetMenuItem(menu, item, option, sizeof(option)))
+		char radiooption[3];
+		if(!menu.GetItem(option, radiooption, sizeof(radiooption)))
 		{
-			PrintToChat(client, "\x01 \x04[Hive365] Unknown option selected.");
+			PrintToChat(client, "\x01[\x04Hive365\x01] \x04Unknown option selected.");
 		}
-		switch(StringToInt(option))
+		
+		switch(StringToInt(radiooption))
 		{
 			case 0:
 			{
@@ -424,40 +467,117 @@ public HelpMenuHandle(Handle:menu, MenuAction:action, client, item)
 			}
 			case 3:
 			{
-				Cmd_Choon(client, 0)
+				Cmd_Choon(client, 0);
 			}
 			case 4:
 			{
-				Cmd_Poon(client, 0)
+				Cmd_Poon(client, 0);
 			}
 		}
 	}
 }
-public LoadMOTDPanel(client, const String:title[], const String:page[], bool:display)
+
+//Functions
+bool HandleSteamIDTracking(StringMap map, int client, bool checkTime = false, int timeCheck = 0)
+{
+	char steamid[32];
+	
+	if(!GetClientAuthId(client, AuthId_Engine, steamid, sizeof(steamid), true))
+	{
+		return false;
+	}
+	
+	if(!checkTime)
+	{
+		int value;
+		
+		if(map.GetValue(steamid, value))
+		{
+			return false;
+		}
+		else
+		{
+			map.SetValue(steamid, 1, true);
+			return true;
+		}
+	}
+	else
+	{
+		float value;
+		
+		if(map.GetValue(steamid, value) && value+(timeCheck*60) > GetEngineTime())
+		{
+			return false;
+		}
+		else
+		{
+			map.SetValue(steamid, GetEngineTime(), true);
+			return true;
+		}
+	}
+}
+
+void DisplayRadioMenu(int client)
+{
+	if(convarEnabled.BoolValue)
+	{
+		if(!bIsTunedIn[client])
+		{
+			char szURL[sizeof(RADIO_PLAYER_URL) + 15];
+			
+			Format(szURL, sizeof(szURL), "%s?volume=%i", RADIO_PLAYER_URL, DEFAULT_RADIO_VOLUME);
+			
+			LoadMOTDPanel(client, "Hive365", szURL, false);
+			
+			bIsTunedIn[client] = true;
+		}
+		
+		menuTuned.Display(client, 30);
+	}
+	else
+	{
+		PrintToChat(client, "\x01 \x04[Hive365] Hive365 is currently disabled");
+	}
+}
+
+void LoadMOTDPanel(int client, const char [] title, const char [] page, bool display)
 {
 	if(client == 0  || !IsClientInGame(client))
 		return;
 	
-	new Handle:kv = CreateKeyValues("data");
+	KeyValues kv = new KeyValues("data");
 
-	KvSetString(kv, "title", title);
-	KvSetNum(kv, "type", MOTDPANEL_TYPE_URL);
-	KvSetString(kv, "msg", page);
+	kv.SetString("title", title);
+	kv.SetNum("type", MOTDPANEL_TYPE_URL);
+	kv.SetString("msg", page);
 
 	ShowVGUIPanel(client, "info", kv, display);
-	CloseHandle(kv);
+	
+	delete kv;
 }
-MakeSocketRequest(SocketInfo:type, serial, const String:buffer[])
+
+void MakeSocketRequest(SocketInfo type, int serial = 0, const char [] buffer = "")
 {
-	new Handle:socket = SocketCreate(SOCKET_TCP, OnSocketError);
-	new Handle:pack = CreateDataPack();
-	WritePackCell(pack, _:type);
-	if(type != SocketInfo_Info)
+	Handle socket = SocketCreate(SOCKET_TCP, OnSocketError);
+	
+	DataPack pack = CreateDataPack();
+	
+	pack.WriteCell(view_as<any>(type));
+	
+	if(type == SocketInfo_HeartBeat)
 	{
-		WritePackCell(pack, serial);
-		WritePackString(pack, buffer);
+		SocketSetArg(socket, pack);
+		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "data.hive365.co.uk", 80);
+		return;
 	}
+	else if(type != SocketInfo_Info)
+	{
+		pack.WriteCell(serial);
+		pack.WriteString(buffer);
+	}
+	
 	SocketSetArg(socket, pack);
+	
 	if(type == SocketInfo_Info)
 	{
 		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "data.hive365.co.uk", 80);
@@ -467,125 +587,195 @@ MakeSocketRequest(SocketInfo:type, serial, const String:buffer[])
 		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "www.hive365.co.uk", 80);
 	}
 }
-public OnSocketConnected(Handle:socket, any:pack) 
+
+void SendSocketRequest(Handle socket, char [] request, char [] host)
 {
-	decl String:requestStr[1024];
-	ResetPack(pack);
-	new SocketInfo:type = SocketInfo:_:ReadPackCell(pack);
+	char requestStr[2048];
+	Format(requestStr, sizeof(requestStr), "GET /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", request, host);
 	
-	if(type == SocketInfo_Info)
-	{
-		Format(requestStr, sizeof(requestStr), "GET /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", "stream/info.php", "data.hive365.co.uk");
-	}
-	else if(type == SocketInfo_Request || type == SocketInfo_Shoutout || type == SocketInfo_DjFtw)
-	{
-		new client = GetClientFromSerial(ReadPackCell(pack));
-		
-		if(client == 0 || !IsClientInGame(client))
-			return;
-		
-		decl String:buffer[128];
-		ReadPackString(pack, buffer, sizeof(buffer));
-		decl String:urlRequest[256];
-		decl String:encodedbuff[512];
-		if(type == SocketInfo_DjFtw)
-		{
-			EncodeBase64(encodedbuff, sizeof(encodedbuff), szCurrentDJ);
-		}
-		else
-		{
-			EncodeBase64(encodedbuff, sizeof(encodedbuff), buffer);
-		}
-		decl String:name[MAX_NAME_LENGTH];
-		
-		if(!GetClientName(client, name, sizeof(name)))
-			return;
-		
-		decl String:encodedname[256];
-		EncodeBase64(encodedname, sizeof(encodedname), name);
-		if(type == SocketInfo_DjFtw)
-		{
-			Format(urlRequest, sizeof(urlRequest), "plugin/djrate.php?n=%s&s=%s&host=%s", encodedname, encodedbuff, szEncodedHost);
-		}
-		else if(type == SocketInfo_Shoutout)
-		{
-			Format(urlRequest, sizeof(urlRequest), "plugin/shoutout.php?n=%s&s=%s&host=%s", encodedname, encodedbuff, szEncodedHost);
-		}
-		else
-		{
-			Format(urlRequest, sizeof(urlRequest), "plugin/request.php?n=%s&s=%s&host=%s", encodedname, encodedbuff, szEncodedHost);
-		}
-		Format(requestStr, sizeof(requestStr), "GET /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", urlRequest, "www.hive365.co.uk");
-	}
-	else if(type == SocketInfo_Choon || type == SocketInfo_Poon)
-	{
-		new client = GetClientFromSerial(ReadPackCell(pack));
-		
-		if(client == 0 || !IsClientInGame(client))
-			return;
-		
-		decl String:name[MAX_NAME_LENGTH];
-		
-		if(!GetClientName(client, name, sizeof(name)))
-			return;
-		
-		decl String:encodedname[256];
-		EncodeBase64(encodedname, sizeof(encodedname), name);
-		
-		new t = 3;
-		if(type == SocketInfo_Poon)
-		{
-			t = 4;
-		}
-		Format(requestStr, sizeof(requestStr), "GET /plugin/song_rate.php?n=%s&t=%i&host=%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", encodedname, t, szEncodedHost, "www.hive365.co.uk");
-	}
 	SocketSend(socket, requestStr);
 }
 
-public OnSocketReceive(Handle:socket, String:receiveData[], const dataSize, any:pack) 
+void ParseSocketInfo(char [] receivedData)
 {
-	ResetPack(pack);
-	new SocketInfo:type = SocketInfo:_:ReadPackCell(pack);
+	char song[256] = "Unknown";
+	char dj[64] = "AutoDj";
 	
-	if(SocketInfo:type == SocketInfo_Info)
+	//Get the actual json we need
+	int startOfJson = StrContains(receivedData, "{\"status\":");
+	
+	if(startOfJson)
 	{
-		ParseSocketInfo(receiveData);
+		JSON jsonObject = json_decode(receivedData[startOfJson], _, strlen(receivedData[startOfJson])-1);
+		
+		if(jsonObject)
+		{
+			if(json_get_string(jsonObject, "artist_song", song, sizeof(song)))
+			{
+				DecodeHTMLEntities(song, sizeof(song));
+				if(!StrEqual(song, szCurrentSong, false))
+				{
+					strcopy(szCurrentSong, sizeof(szCurrentSong), song);
+					PrintToChatAll("\x01[\x04Hive365\x01] \x04Now Playing: %s", szCurrentSong);
+				}
+			}
+			if(json_get_string(jsonObject, "title", dj, sizeof(dj)))
+			{
+				DecodeHTMLEntities(dj, sizeof(dj));
+				if(!StrEqual(dj, szCurrentDJ, false))
+				{
+					strcopy(szCurrentDJ, sizeof(szCurrentDJ), dj);
+					stringmapDJFTW.Clear();
+					PrintToChatAll("\x01[\x04Hive365\x01] \x04Your DJ is: %s", szCurrentDJ);
+				}
+			}
+		}
 	}
 }
 
-public OnSocketDisconnected(Handle:socket, any:pack) 
+void DecodeHTMLEntities(char [] str, int size)
 {
-	ResetPack(pack);
-	new SocketInfo:type = SocketInfo:_:ReadPackCell(pack);
+	static char htmlEnts[][][] = 
+	{
+		{"&amp;", "&"},
+		{"\\", ""},
+		{"&lt;", "<"},
+		{"&gt;", ">"}
+	};
+	
+	for(int i = 0; i < 4; i++)
+	{
+		ReplaceString(str, size, htmlEnts[i][0], htmlEnts[i][1], false);
+	}
+}
+
+//Socket Handlers
+#pragma newdecls optional
+
+public OnSocketConnected(Handle socket, any pack) 
+{
+	char urlRequest[1024];
+	(view_as<DataPack>(pack)).Reset();
+	
+	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
+	
+	if(type == SocketInfo_HeartBeat)
+	{
+		char buffer[64];
+		
+		EncodeBase64(buffer, sizeof(buffer), PLUGIN_VERSION);
+		
+		Format(urlRequest, sizeof(urlRequest), "addServer.php?port=%s&version=%s", szEncodedHostPort, buffer);
+		
+		SendSocketRequest(socket, urlRequest, "data.hive365.co.uk");
+		return;
+	}
+	else if(type == SocketInfo_Info)
+	{
+		SendSocketRequest(socket, "stream/info.php", "data.hive365.co.uk");
+		return;
+	}
+	else
+	{
+		int client = GetClientFromSerial((view_as<DataPack>(pack)).ReadCell());
+		char name[MAX_NAME_LENGTH];
+		char szEncodedName[128];
+		char szEncodedData[256];
+
+		if(client == 0 || !IsClientInGame(client) || !GetClientName(client, name, sizeof(name)))
+		{
+			return;
+		}
+		
+		EncodeBase64(szEncodedName, sizeof(szEncodedName), name);
+		
+		if(type == SocketInfo_Request || type == SocketInfo_Shoutout || type == SocketInfo_DjFtw)
+		{
+			if(type == SocketInfo_DjFtw)
+			{
+				EncodeBase64(szEncodedData, sizeof(szEncodedData), szCurrentDJ);
+			}
+			else
+			{
+				char buffer[128];
+				
+				(view_as<DataPack>(pack)).ReadString(buffer, sizeof(buffer));
+				EncodeBase64(szEncodedData, sizeof(szEncodedData), buffer);
+			}
+			
+			if(type == SocketInfo_DjFtw)
+			{
+				Format(urlRequest, sizeof(urlRequest), "plugin/djrate.php?n=%s&s=%s&host=%s", szEncodedName, szEncodedData, szEncodedHostname);
+			}
+			else if(type == SocketInfo_Shoutout)
+			{
+				Format(urlRequest, sizeof(urlRequest), "plugin/shoutout.php?n=%s&s=%s&host=%s", szEncodedName, szEncodedData, szEncodedHostname);
+			}
+			else
+			{
+				Format(urlRequest, sizeof(urlRequest), "plugin/request.php?n=%s&s=%s&host=%s", szEncodedName, szEncodedData, szEncodedHostname);
+			}
+		}
+		else if(type == SocketInfo_Choon)
+		{
+			Format(urlRequest, sizeof(urlRequest), "plugin/song_rate.php?n=%s&t=3&host=%s", szEncodedName, szEncodedHostname);
+		}
+		else if(type == SocketInfo_Poon)
+		{
+			Format(urlRequest, sizeof(urlRequest), "plugin/song_rate.php?n=%s&t=4&host=%s", szEncodedName, szEncodedHostname);
+		}
+		
+		SendSocketRequest(socket, urlRequest, "www.hive365.co.uk");
+		return;
+	}
+
+}
+
+public OnSocketReceive(Handle socket, char [] receivedData, const int dataSize, any pack) 
+{
+	(view_as<DataPack>(pack)).Reset();
+	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
+	
+	if(type == SocketInfo_Info)
+	{
+		ParseSocketInfo(receivedData);
+	}
+}
+
+public OnSocketDisconnected(Handle socket, any pack) 
+{
+	(view_as<DataPack>(pack)).Reset();
+	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
+	
 	if(type == SocketInfo_Request || type == SocketInfo_Shoutout || type == SocketInfo_DjFtw)
 	{
-		new client = GetClientFromSerial(ReadPackCell(pack));
+		int client = GetClientFromSerial((view_as<DataPack>(pack)).ReadCell());
 		
 		if(client != 0 && IsClientInGame(client))
 		{
 			if(type == SocketInfo_DjFtw)
 			{
-				PrintToChatAll("\x01 \x04[Hive365] %N thinks %s is a banging DJ!", client, szCurrentDJ);
+				PrintToChatAll("\x01[\x04Hive365\x01] \x04%N thinks %s is a banging DJ!", client, szCurrentDJ);
 			}
 			else if(type == SocketInfo_Shoutout)
 			{
-				PrintToChat(client, "\x01 \x04[Hive365] Your Shoutout has been sent!");
+				PrintToChat(client, "\x01[\x04Hive365\x01] \x04Your Shoutout has been sent!");
 			}
 			else
 			{
-				PrintToChat(client, "\x01 \x04[Hive365] Your Request has been sent!");
+				PrintToChat(client, "\x01[\x04Hive365\x01] \x04Your Request has been sent!");
 			}
 		}
 	}
 	
-	CloseHandle(pack);
-	CloseHandle(socket);
+	delete view_as<DataPack>(pack);
+	delete socket;
 }
 
-public OnSocketError(Handle:socket, const errorType, const errorNum, any:pack) 
+public OnSocketError(Handle socket, const int errorType, const int errorNum, any pack) 
 {
-	ResetPack(pack);
-	new SocketInfo:type = SocketInfo:_:ReadPackCell(pack);
+	(view_as<DataPack>(pack)).Reset();
+	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
 	
 	if(type == SocketInfo_Info)
 	{
@@ -593,45 +783,7 @@ public OnSocketError(Handle:socket, const errorType, const errorNum, any:pack)
 		strcopy(szCurrentDJ, sizeof(szCurrentDJ), "AutoDj");
 	}
 	LogError("[Hive365] socket error %d (errno %d)", errorType, errorNum);
-	CloseHandle(socket);
-	CloseHandle(pack);
-}
-ParseSocketInfo(String:receiveData[])
-{
-	new String:song[256] = "Unknown";
-	new String:dj[64] = "AutoDj";
-
-	if(MatchRegex(hRegexSong, receiveData) >= 1)
-	{
-		GetRegexSubString(hRegexSong, 4, song, sizeof(song));
-		
-		CleanInfo(song, sizeof(song));
-		
-		if(!StrEqual(song, szCurrentSong, false))
-		{
-			strcopy(szCurrentSong, sizeof(szCurrentSong), song);
-			PrintToChatAll("\x01 \x04[Hive365] Now Playing: %s", szCurrentSong);
-		}
-	}
-		
-	if(MatchRegex(hRegexDJ, receiveData) >= 1)
-	{
-		GetRegexSubString(hRegexDJ, 4, dj, sizeof(dj));
-		
-		CleanInfo(dj, sizeof(dj));
-		
-		if(!StrEqual(dj, szCurrentDJ, false))
-		{
-			strcopy(szCurrentDJ, sizeof(szCurrentDJ), dj);
-			ClearTrie(hFTWTrie);
-			PrintToChatAll("\x01 \x04[Hive365] Your DJ is: %s", szCurrentDJ);
-		}
-	}
-}
-CleanInfo(String:str[], size)
-{
-	for(new i = 0; i < sizeof(szSearch); i++)
-	{
-		ReplaceString(str, size, szSearch[i], szReplace[i], false);
-	}
+	
+	delete view_as<DataPack>(pack);
+	delete socket;
 }
