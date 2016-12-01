@@ -7,7 +7,7 @@
 #pragma newdecls required
 
 //Defines
-#define PLUGIN_VERSION	"4.0.0"
+#define PLUGIN_VERSION	"4.0.1"
 char RADIO_PLAYER_URL[] = "http://hive365.co.uk/plugin/player/";
 #define DEFAULT_RADIO_VOLUME 20
 
@@ -629,6 +629,7 @@ void ParseSocketInfo(char [] receivedData)
 					PrintToChatAll("\x01[\x04Hive365\x01] \x04Your DJ is: %s", szCurrentDJ);
 				}
 			}
+			json_destroy(jsonObject);
 		}
 	}
 }
