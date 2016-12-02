@@ -3,11 +3,14 @@
 #include <base64>
 #include <json>
 
+#undef REQUIRE_EXTENSIONS
+#include <SteamWorks>
+
 #pragma semicolon 1
 #pragma newdecls required
 
 //Defines
-#define PLUGIN_VERSION	"4.0.1"
+#define PLUGIN_VERSION	"4.0.2"
 char RADIO_PLAYER_URL[] = "http://hive365.co.uk/plugin/player/";
 #define DEFAULT_RADIO_VOLUME 20
 
@@ -57,6 +60,8 @@ enum SocketInfo
 	SocketInfo_HeartBeat,
 };
 
+char szEncodedHostip[128] = "";
+
 public Plugin myinfo = 
 {
 	name = "Hive365 Player",
@@ -72,7 +77,7 @@ public void OnPluginStart()
 	stringmapRequest = new StringMap();
 	stringmapShoutout = new StringMap();
 	stringmapDJFTW = new StringMap();
-
+	
 	RegConsoleCmd("sm_radio", Cmd_RadioMenu);
 	RegConsoleCmd("sm_radiohelp", Cmd_RadioHelp);
 	RegConsoleCmd("sm_dj", Cmd_DjInfo);
@@ -191,6 +196,25 @@ public void HookShowInfo(ConVar convar, const char[] oldValue, const char[] newV
 	if(convar.IntValue < 1)
 	{
 		convar.IntValue = 1;
+	}
+}
+
+public int SteamWorks_SteamServersConnected()
+{
+	if(GetFeatureStatus(FeatureType_Native, "SteamWorks_GetPublicIP") == FeatureStatus_Available)
+	{
+		int ipParts[4];
+		if(SteamWorks_GetPublicIP(ipParts))
+		{
+			char ip[20];
+			char encodedIP[128];
+			
+			Format(ip, sizeof(ip), "%i.%i.%i.%i", ipParts[0], ipParts[1], ipParts[2], ipParts[3]);
+			EncodeBase64(encodedIP, sizeof(encodedIP), ip);
+			
+			Format(szEncodedHostip, sizeof(szEncodedHostip), "&ip=%s", encodedIP);
+			MakeSocketRequest(SocketInfo_HeartBeat);
+		}
 	}
 }
 
@@ -666,7 +690,7 @@ public OnSocketConnected(Handle socket, any pack)
 		
 		EncodeBase64(buffer, sizeof(buffer), PLUGIN_VERSION);
 		
-		Format(urlRequest, sizeof(urlRequest), "addServer.php?port=%s&version=%s", szEncodedHostPort, buffer);
+		Format(urlRequest, sizeof(urlRequest), "addServer.php?port=%s&version=%s%s", szEncodedHostPort, buffer, szEncodedHostip);
 		
 		SendSocketRequest(socket, urlRequest, "data.hive365.co.uk");
 		return;
