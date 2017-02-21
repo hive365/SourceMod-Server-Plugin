@@ -3,6 +3,11 @@
 #include <base64>
 #include <json>
 
+#undef REQUIRE_PLUGIN
+#include <updater>
+
+#define UPDATE_URL    "http://hive365.co.uk/plugin/updatefile.txt"
+
 #undef REQUIRE_EXTENSIONS
 #include <SteamWorks>
 
@@ -10,7 +15,7 @@
 #pragma newdecls required
 
 //Defines
-#define PLUGIN_VERSION	"4.0.2"
+#define PLUGIN_VERSION	"4.0.3"
 char RADIO_PLAYER_URL[] = "http://hive365.co.uk/plugin/player/";
 #define DEFAULT_RADIO_VOLUME 20
 
@@ -28,7 +33,7 @@ Menu menuTuned;
 //Tracked Information
 char szEncodedHostname[256];
 char szEncodedHostPort[16];
-char szCurrentSong[64];
+char szCurrentSong[256];
 char szCurrentDJ[64];
 bool bIsTunedIn[MAXPLAYERS+1];
 
@@ -163,6 +168,20 @@ public void OnPluginStart()
 	CreateTimer(INFO_REFRESH_RATE, GetStreamInfoTimer, _, TIMER_REPEAT);
 	
 	for(int i = 0; i <= MaxClients; i++){bIsTunedIn[i] = false;}
+	
+	
+	if (LibraryExists("updater"))
+	{
+		Updater_AddPlugin(UPDATE_URL);
+	}
+}
+
+public void OnLibraryAdded(const char[] name)
+{
+    if (StrEqual(name, "updater"))
+    {
+        Updater_AddPlugin(UPDATE_URL);
+    }
 }
 
 public void OnMapStart()

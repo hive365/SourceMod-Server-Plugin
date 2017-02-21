@@ -1,0 +1,19 @@
+"Updater"
+{
+	"Information"
+	{
+		"Version"
+		{
+			"Latest"	"4.0.3"
+		}
+		
+		"Notes"	"More info @ www.hive365.co.uk. Changes in 4.0.3:"
+	}
+	
+	"Files"
+	{
+		"Plugin"	"Path_SM/plugins/hive365radio.smx"
+
+		"Source"	"Path_SM/scripting/hive365radio.sp"
+	}
+}
