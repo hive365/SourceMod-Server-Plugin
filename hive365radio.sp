@@ -15,7 +15,7 @@
 #pragma newdecls required
 
 //Defines
-#define PLUGIN_VERSION	"4.0.3"
+#define PLUGIN_VERSION	"4.0.4"
 char RADIO_PLAYER_URL[] = "http://hive365.co.uk/plugin/player/";
 #define DEFAULT_RADIO_VOLUME 20
 
@@ -103,7 +103,8 @@ public void OnPluginStart()
 	
 	menuTuned = new Menu(RadioTunedMenuHandle);
 	menuTuned.SetTitle("Radio Options");
-	menuTuned.AddItem("0", "Adjust Volume");
+	//menuTuned.AddItem("0", "Adjust Volume");
+	menuTuned.AddItem("0", "Start Radio (Will open motd window to play and adjust volume)");
 	menuTuned.AddItem("1", "Stop Radio");
 	menuTuned.AddItem("2", "Radio Help");
 	menuTuned.ExitButton = true;
@@ -134,6 +135,7 @@ public void OnPluginStart()
 	menuHelp.AddItem("4", "Type !poon in chat if you dislike a song");
 	menuHelp.AddItem("-1", "Type !request song name in chat to request a song");
 	menuHelp.AddItem("-1", "Type !shoutout shoutout in chat to request a shoutout");
+	menuHelp.AddItem("-1", "NOTE: Currently broken for CS:GO");
 	menuHelp.AddItem("-1", "NOTE: You must have HTML MOTD enabled!");
 	menuHelp.Pagination = MENU_NO_PAGINATION;
 	menuHelp.ExitButton = true;
@@ -398,7 +400,8 @@ public Action Cmd_RadioMenu(int client, int args)
 {
 	if(client > 0 && client <= MaxClients && IsClientInGame(client))
 	{
-		DisplayRadioMenu(client);
+		menuTuned.Display(client, 30);
+		//DisplayRadioMenu(client);
 	}
 	
 	return Plugin_Handled;
@@ -442,7 +445,11 @@ public int RadioTunedMenuHandle(Menu menu, MenuAction action, int client, int op
 		{
 			case Radio_Volume:
 			{
-				menuVolume.Display(client, 30);
+				if(client > 0 && client <= MaxClients && IsClientInGame(client))
+				{
+					DisplayRadioMenu(client);
+				}
+				//menuVolume.Display(client, 30);
 			}
 			case Radio_Off:
 			{
@@ -568,14 +575,12 @@ void DisplayRadioMenu(int client)
 		{
 			char szURL[sizeof(RADIO_PLAYER_URL) + 15];
 			
-			Format(szURL, sizeof(szURL), "%s?volume=%i", RADIO_PLAYER_URL, DEFAULT_RADIO_VOLUME);
+			Format(szURL, sizeof(szURL), "https://hive365.co.uk/web_player/", RADIO_PLAYER_URL, DEFAULT_RADIO_VOLUME);
 			
-			LoadMOTDPanel(client, "Hive365", szURL, false);
+			LoadMOTDPanel(client, "Hive365", szURL, true);
 			
 			bIsTunedIn[client] = true;
 		}
-		
-		menuTuned.Display(client, 30);
 	}
 	else
 	{

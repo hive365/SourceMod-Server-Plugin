@@ -4,10 +4,10 @@
 	{
 		"Version"
 		{
-			"Latest"	"4.0.3"
+			"Latest"	"4.0.4"
 		}
 		
-		"Notes"	"More info @ www.hive365.co.uk. Changes in 4.0.3:"
+		"Notes"	"More info @ www.hive365.co.uk. Changes in 4.0.4:"
 	}
 	
 	"Files"
