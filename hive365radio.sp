@@ -15,8 +15,8 @@
 #pragma newdecls required
 
 //Defines
-#define PLUGIN_VERSION	"4.0.4"
-char RADIO_PLAYER_URL[] = "http://hive365.co.uk/plugin/player/";
+#define PLUGIN_VERSION	"4.0.5"
+char RADIO_PLAYER_URL[] = "http://hive365.co.uk/plugin/player/player_manual.html";
 #define DEFAULT_RADIO_VOLUME 20
 
 //Timer defines
@@ -483,7 +483,7 @@ public int RadioVolumeMenuHandle(Menu menu, MenuAction action, int client, int o
 		
 		char szURL[sizeof(RADIO_PLAYER_URL) + 15];
 		
-		Format(szURL, sizeof(szURL), "%s?volume=%s", RADIO_PLAYER_URL, szVolume);
+		Format(szURL, sizeof(szURL), RADIO_PLAYER_URL);
 	
 		LoadMOTDPanel(client, "Hive365", szURL, false);
 		
@@ -575,7 +575,7 @@ void DisplayRadioMenu(int client)
 		{
 			char szURL[sizeof(RADIO_PLAYER_URL) + 15];
 			
-			Format(szURL, sizeof(szURL), "https://hive365.co.uk/web_player/", RADIO_PLAYER_URL, DEFAULT_RADIO_VOLUME);
+			Format(szURL, sizeof(szURL), RADIO_PLAYER_URL);
 			
 			LoadMOTDPanel(client, "Hive365", szURL, true);
 			
