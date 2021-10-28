@@ -6,7 +6,7 @@
 #undef REQUIRE_PLUGIN
 #include <updater>
 
-#define UPDATE_URL    "http://hive365.co.uk/plugin/updatefile.txt"
+#define UPDATE_URL    "https://hive365.co.uk/plugin/updatefile.txt"
 
 #undef REQUIRE_EXTENSIONS
 #include <SteamWorks>
@@ -16,7 +16,7 @@
 
 //Defines
 #define PLUGIN_VERSION	"4.0.5"
-char RADIO_PLAYER_URL[] = "http://hive365.co.uk/plugin/player/player_manual.html";
+char RADIO_PLAYER_URL[] = "https://hive365.co.uk/plugin/player/player_manual.html";
 #define DEFAULT_RADIO_VOLUME 20
 
 //Timer defines
@@ -73,7 +73,7 @@ public Plugin myinfo =
 	author = "Hive365.co.uk",
 	description = "Hive365 In-Game Radio Player",
 	version = PLUGIN_VERSION,
-	url = "http://www.hive365.co.uk"
+	url = "https://www.hive365.co.uk"
 }
 
 public void OnPluginStart()
