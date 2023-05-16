@@ -4,16 +4,14 @@
 	{
 		"Version"
 		{
-			"Latest"	"4.0.6"
+			"Latest"	"4.1.0"
 		}
 		
-		"Notes"	"More info @ www.hive365.co.uk. Changes in 4.0.6:"
+		"Notes"	"More info @ www.hive365.radio. Changes in 4.1.0:"
 	}
 	
 	"Files"
 	{
 		"Plugin"	"Path_SM/plugins/hive365radio.smx"
-
-		"Source"	"Path_SM/scripting/hive365radio.sp"
 	}
 }

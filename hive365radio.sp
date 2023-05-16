@@ -15,7 +15,7 @@
 #pragma newdecls required
 
 //Defines
-#define PLUGIN_VERSION	"4.0.6"
+#define PLUGIN_VERSION	"4.1.0"
 char RADIO_PLAYER_URL[] = "https://hive365.co.uk/plugin/player/player_manual.html";
 #define DEFAULT_RADIO_VOLUME 20
 
