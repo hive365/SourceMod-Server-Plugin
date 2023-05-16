@@ -169,8 +169,10 @@ public void OnPluginStart()
 	CreateTimer(HIVE_ADVERT_RATE, ShowAdvert, _, TIMER_REPEAT);
 	CreateTimer(INFO_REFRESH_RATE, GetStreamInfoTimer, _, TIMER_REPEAT);
 	
-	for(int i = 0; i <= MaxClients; i++){bIsTunedIn[i] = false;}
-	
+	for(int i = 0; i <= MaxClients; i++)
+	{
+		bIsTunedIn[i] = false;
+	}
 	
 	if (LibraryExists("updater"))
 	{
@@ -220,7 +222,7 @@ public void HookShowInfo(ConVar convar, const char[] oldValue, const char[] newV
 	}
 }
 
-public int SteamWorks_SteamServersConnected()
+public void SteamWorks_SteamServersConnected()
 {
 	if(GetFeatureStatus(FeatureType_Native, "SteamWorks_GetPublicIP") == FeatureStatus_Available)
 	{
