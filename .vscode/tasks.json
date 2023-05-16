@@ -12,6 +12,9 @@
         "windows": {
           "command": "spcomp"
         },
+        "linux": {
+          "command": "/home/ralph/Hive-SourceMod/addons/sourcemod/scripting/spcomp"
+        },
 
         "args": [
           "${file}",
