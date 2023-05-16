@@ -649,36 +649,35 @@ void ParseSocketInfo(char [] receivedData)
 	char song[256] = "Unknown";
 	char dj[64] = "AutoDj";
 	
-	//Get the actual json we need
-	int startOfJson = StrContains(receivedData, "{\"status\":");
+	// //Get the actual json we need
+	int startOfJson = StrContains(receivedData, "{");
 	
 	if(startOfJson)
 	{
-		JSON jsonObject = json_decode(receivedData[startOfJson], _, strlen(receivedData[startOfJson])-1);
-		
-		if(jsonObject)
+		char JsonData[4096];
+		strcopy(JsonData, sizeof(JsonData), receivedData[startOfJson-1]);
+
+		JSON_Object JsonObject = json_decode(JsonData);
+		JSON_Object StreamInfo = JsonObject.GetObject("info");
+
+		StreamInfo.GetString("artist_song", song, sizeof(song));
+		DecodeHTMLEntities(song, sizeof(song));
+		if(!StrEqual(song, szCurrentSong, false))
 		{
-			if(json_get_string(jsonObject, "artist_song", song, sizeof(song)))
-			{
-				DecodeHTMLEntities(song, sizeof(song));
-				if(!StrEqual(song, szCurrentSong, false))
-				{
-					strcopy(szCurrentSong, sizeof(szCurrentSong), song);
-					PrintToChatAll("\x01[\x04Hive365\x01] \x04Now Playing: %s", szCurrentSong);
-				}
-			}
-			if(json_get_string(jsonObject, "title", dj, sizeof(dj)))
-			{
-				DecodeHTMLEntities(dj, sizeof(dj));
-				if(!StrEqual(dj, szCurrentDJ, false))
-				{
-					strcopy(szCurrentDJ, sizeof(szCurrentDJ), dj);
-					stringmapDJFTW.Clear();
-					PrintToChatAll("\x01[\x04Hive365\x01] \x04Your DJ is: %s", szCurrentDJ);
-				}
-			}
-			json_destroy(jsonObject);
+			strcopy(szCurrentSong, sizeof(szCurrentSong), song);
+			PrintToChatAll("\x01[\x04Hive365\x01] \x04Now Playing: %s", szCurrentSong);
 		}
+
+		StreamInfo.GetString("title", dj, sizeof(dj));
+		DecodeHTMLEntities(dj, sizeof(dj));
+		if(!StrEqual(dj, szCurrentDJ, false))
+		{
+			strcopy(szCurrentDJ, sizeof(szCurrentDJ), dj);
+			stringmapDJFTW.Clear();
+			PrintToChatAll("\x01[\x04Hive365\x01] \x04Your DJ is: %s", szCurrentDJ);
+		}
+
+		json_cleanup_and_delete(JsonObject);
 	}
 }
 
