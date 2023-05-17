@@ -13,5 +13,9 @@
 	"Files"
 	{
 		"Plugin"	"Path_SM/plugins/hive365radio.smx"
+		"Plugin"	"Path_SM/extensions/SteamWorks.ext.dll"
+		"Plugin"	"Path_SM/extensions/SteamWorks.ext.so"
+		"Plugin"	"Path_SM/extensions/socket.ext.dll"
+		"Plugin"	"Path_SM/extensions/socket.ext.so"
 	}
 }
