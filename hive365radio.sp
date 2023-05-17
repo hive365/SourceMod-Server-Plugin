@@ -715,7 +715,7 @@ public OnSocketConnected(Handle socket, any pack)
 		
 		EncodeBase64(buffer, sizeof(buffer), PLUGIN_VERSION);
 		
-		Format(urlRequest, sizeof(urlRequest), "addServer.php?port=%s&version=%s%s", szEncodedHostPort, buffer, szEncodedHostip);
+		Format(urlRequest, sizeof(urlRequest), "addServer.php?port=%s&version=%s", szEncodedHostPort, buffer);
 		
 		SendSocketRequest(socket, urlRequest, "data.hive365.co.uk");
 		return;
