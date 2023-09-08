@@ -245,6 +245,7 @@ public void SteamWorks_SteamServersConnected()
 public Action GetStreamInfoTimer(Handle timer)
 {
 	MakeSocketRequest(SocketInfo_Info);
+	return Plugin_Continue;
 }
 
 public Action ShowAdvert(Handle timer)
@@ -256,6 +257,7 @@ public Action ShowAdvert(Handle timer)
 			PrintToChat(i, "\x01[\x04Hive365\x01] \x04This server is running Hive365 Radio type !radiohelp for Help!");
 		}
 	}
+	return Plugin_Continue;
 }
 
 public Action HelpMessage(Handle timer, any serial)
@@ -265,7 +267,6 @@ public Action HelpMessage(Handle timer, any serial)
 	{
 		PrintToChat(client, "\x01[\x04Hive365\x01] \x04This server is running Hive365 Radio type !radiohelp for Help!");
 	}
-	
 	return Plugin_Continue;
 }
 
@@ -470,6 +471,7 @@ public int RadioTunedMenuHandle(Menu menu, MenuAction action, int client, int op
 			}
 		}
 	}
+	return 0;
 }
 
 public int RadioVolumeMenuHandle(Menu menu, MenuAction action, int client, int option)
@@ -491,6 +493,7 @@ public int RadioVolumeMenuHandle(Menu menu, MenuAction action, int client, int o
 		
 		bIsTunedIn[client] = true;
 	}
+	return 0;
 }
 
 public int HelpMenuHandle(Menu menu, MenuAction action, int client, int option)
@@ -527,6 +530,7 @@ public int HelpMenuHandle(Menu menu, MenuAction action, int client, int option)
 			}
 		}
 	}
+	return 0;
 }
 
 //Functions
