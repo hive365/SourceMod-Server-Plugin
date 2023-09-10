@@ -630,7 +630,7 @@ void MakeSocketRequest(SocketInfo type, int serial = 0, const char [] buffer = "
 	
 	if(type == SocketInfo_Info)
 	{
-		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "data.hive365.co.uk", 80);
+		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "legacydata.hive365radio.com", 80);
 	}
 	else
 	{
@@ -722,7 +722,7 @@ public OnSocketConnected(Handle socket, any pack)
 	}
 	else if(type == SocketInfo_Info)
 	{
-		SendSocketRequest(socket, "stream/info.php", "data.hive365.co.uk");
+		SendSocketRequest(socket, "nowplaying", "legacydata.hive365radio.com");
 		return;
 	}
 	else
