@@ -620,10 +620,11 @@ void MakeSocketRequest(SocketInfo type, int serial = 0, const char [] buffer = "
 	}
 }
 
-void SendSocketRequest(Handle socket, char [] request, char [] host)
+void SendSocketRequest(Handle socket, char [] method, char [] request, char [] host)
 {
 	char requestStr[2048];
-	Format(requestStr, sizeof(requestStr), "GET /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", request, host);
+	Format(requestStr, sizeof(requestStr), "%s /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", method, request, host);
+	LogError("Request: %s", requestStr);
 	
 	SocketSend(socket, requestStr);
 }
@@ -710,12 +711,12 @@ public OnSocketConnected(Handle socket, any pack)
 		
 		Format(urlRequest, sizeof(urlRequest), "addServer.php?port=%s&version=%s", szEncodedHostPort, buffer);
 		
-		SendSocketRequest(socket, urlRequest, "http-backend.hive365radio.com");
+		SendSocketRequest(socket, "PUT", urlRequest, "http-backend.hive365radio.com");
 		return;
 	}
 	else if(type == SocketInfo_Info)
 	{
-		SendSocketRequest(socket, "streamInfo/simple", "http-backend.hive365radio.com");
+		SendSocketRequest(socket, "GET", "streamInfo/simple", "http-backend.hive365radio.com");
 		return;
 	}
 	else
@@ -768,7 +769,7 @@ public OnSocketConnected(Handle socket, any pack)
 			Format(urlRequest, sizeof(urlRequest), "plugin/song_rate.php?n=%s&t=4&host=%s", szEncodedName, szEncodedHostname);
 		}
 		
-		SendSocketRequest(socket, urlRequest, "http-backend.hive365radio.com");
+		SendSocketRequest(socket, "POST", urlRequest, "http-backend.hive365radio.com");
 		return;
 	}
 
