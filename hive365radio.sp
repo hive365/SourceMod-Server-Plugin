@@ -623,7 +623,8 @@ void MakeSocketRequest(SocketInfo type, int serial = 0, const char [] buffer = "
 void SendSocketRequest(Handle socket, char [] request, char [] host)
 {
 	char requestStr[2048];
-	Format(requestStr, sizeof(requestStr), "GET /%s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", request, host);
+	Format(requestStr, sizeof(requestStr), "GET /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", request, host);
+	LogError("Request: %s", requestStr);
 	
 	SocketSend(socket, requestStr);
 }
@@ -646,14 +647,12 @@ void ParseSocketInfo(char [] receivedData)
 		strcopy(JsonData, sizeof(JsonData), receivedData[startOfJson-1]);
 
 		JSON_Object JsonObject = json_decode(JsonData);
-		JSON_Object StreamInfo = JsonObject.GetObject("currentlyPlaying");
-		JSON_Object SongInfo = StreamInfo.GetObject("song");
-		JSON_Object DJInfo = StreamInfo.GetObject("streamer");
+		JSON_Object infoObject = JsonObject.GetObject("info");
 
 
 
-		SongInfo.GetString("title", song, sizeof(song));
-		SongInfo.GetString("artist", artist, sizeof(artist));
+		infoObject.GetString("title", song, sizeof(song));
+		infoObject.GetString("artist", artist, sizeof(artist));
 		DecodeHTMLEntities(song, sizeof(song));
 		DecodeHTMLEntities(artist, sizeof(artist));
 
@@ -665,7 +664,7 @@ void ParseSocketInfo(char [] receivedData)
 			PrintToChatAll("\x01[\x04Hive365\x01] \x04Now Playing: %s", szCurrentSong);
 		}
 
-		DJInfo.GetString("name", dj, sizeof(dj));
+		infoObject.GetString("streamer", dj, sizeof(dj));
 		DecodeHTMLEntities(dj, sizeof(dj));
 		if(!StrEqual(dj, szCurrentDJ, false))
 		{
@@ -717,7 +716,7 @@ public OnSocketConnected(Handle socket, any pack)
 	}
 	else if(type == SocketInfo_Info)
 	{
-		SendSocketRequest(socket, "streamInfo", "http-backend.hive365radio.com");
+		SendSocketRequest(socket, "streamInfo/simple", "http-backend.hive365radio.com");
 		return;
 	}
 	else
