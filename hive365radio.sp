@@ -624,7 +624,6 @@ void SendSocketRequest(Handle socket, char [] request, char [] host)
 {
 	char requestStr[2048];
 	Format(requestStr, sizeof(requestStr), "GET /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", request, host);
-	LogError("Request: %s", requestStr);
 	
 	SocketSend(socket, requestStr);
 }
