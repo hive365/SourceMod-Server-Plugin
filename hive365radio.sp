@@ -616,10 +616,10 @@ void MakeSocketRequest(SocketInfo type, int serial = 0, const char [] buffer = "
 	}
 }
 
-void SendSocketRequest(Handle socket, char [] method, char [] requestPath, char[] requestJSON, char [] host)
+void SendSocketRequest(Handle socket, char [] method, char [] request, char [] host)
 {
 	char requestStr[2048];
-	Format(requestStr, sizeof(requestStr), "%s /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", method, requestPath, host);
+	Format(requestStr, sizeof(requestStr), "%s /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", method, request, host);
 	LogError("Request: %s", requestStr);
 	
 	SocketSend(socket, requestStr);
