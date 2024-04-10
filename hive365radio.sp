@@ -718,54 +718,43 @@ public OnSocketConnected(Handle socket, any pack)
 	else
 	{
 		int client = GetClientFromSerial((view_as<DataPack>(pack)).ReadCell());
-		char name[MAX_NAME_LENGTH];
-		char szEncodedName[128];
-		char szEncodedData[256];
+		char szUsername[MAX_NAME_LENGTH];
+		char urlRequest[128];
 
 		if(client == 0 || !IsClientInGame(client) || !GetClientName(client, name, sizeof(name)))
 		{
 			return;
 		}
 		
-		EncodeBase64(szEncodedName, sizeof(szEncodedName), name);
-		
-		if(type == SocketInfo_Request || type == SocketInfo_Shoutout || type == SocketInfo_DjFtw)
+		if(type == SocketInfo_DjFtw)
 		{
-			if(type == SocketInfo_DjFtw)
+			urlRequest = "rating/streamer";
+			SendHTTPRequest(urlRequest, szUsername, szHostname);
+		}
+		else if(type == SocketInfo_Request)
+		{
+			urlRequest = "songrequest";
+			Format(urlRequest, sizeof(urlRequest), "plugin/request.php?n=%s&s=%s&host=%s", szUsername, szEncodedData, szHostname);
+		}
+		else if(type == SocketInfo_Shoutout)
+		{
+			urlRequest = "shoutout";
+			Format(urlRequest, sizeof(urlRequest), "plugin/shoutout.php?n=%s&s=%s&host=%s", szUsername, szEncodedData, szHostname);
+		}
+		else if(type == SocketInfo_Choon || type == SocketInfo_Poon)
 			{
-				EncodeBase64(szEncodedData, sizeof(szEncodedData), szCurrentDJ);
+			char rateType[8];
+			urlRequest = "rating/song";
+			if(type == SocketInfo_Choon)
+			{
+				rateType = "CHOON";
 			}
 			else
 			{
-				char buffer[128];
-				
-				(view_as<DataPack>(pack)).ReadString(buffer, sizeof(buffer));
-				EncodeBase64(szEncodedData, sizeof(szEncodedData), buffer);
+				rateType = "POON";
 			}
-			
-			if(type == SocketInfo_DjFtw)
-			{
-				Format(urlRequest, sizeof(urlRequest), "plugin/djrate.php?n=%s&s=%s&host=%s", szEncodedName, szEncodedData, szEncodedHostname);
+			SendHTTPRequest(urlRequest, rateType, szUsername, szHostname);
 			}
-			else if(type == SocketInfo_Shoutout)
-			{
-				Format(urlRequest, sizeof(urlRequest), "plugin/shoutout.php?n=%s&s=%s&host=%s", szEncodedName, szEncodedData, szEncodedHostname);
-			}
-			else
-			{
-				Format(urlRequest, sizeof(urlRequest), "plugin/request.php?n=%s&s=%s&host=%s", szEncodedName, szEncodedData, szEncodedHostname);
-			}
-		}
-		else if(type == SocketInfo_Choon)
-		{
-			Format(urlRequest, sizeof(urlRequest), "plugin/song_rate.php?n=%s&t=3&host=%s", szEncodedName, szEncodedHostname);
-		}
-		else if(type == SocketInfo_Poon)
-		{
-			Format(urlRequest, sizeof(urlRequest), "plugin/song_rate.php?n=%s&t=4&host=%s", szEncodedName, szEncodedHostname);
-		}
-		
-		SendSocketRequest(socket, "POST", urlRequest, "http-backend.hive365radio.com");
 		return;
 	}
 
