@@ -1,22 +1,19 @@
 #include <sourcemod>
-#include <socket>
-#include <base64>
-#include <json>
-
+#include <ripext>
+		
 #undef REQUIRE_PLUGIN
 #include <updater>
 
-#define UPDATE_URL    "https://hive365.co.uk/plugin/updatefile.txt"
+#define UPDATE_URL    "https://raw.githubusercontent.com/hive365/SourceMod-Server-Plugin/master/updatefile.txt"
 
 #undef REQUIRE_EXTENSIONS
-#include <SteamWorks>
 
 #pragma semicolon 1
 #pragma newdecls required
 
 //Defines
-#define PLUGIN_VERSION	"4.1.0"
-char RADIO_PLAYER_URL[] = "https://hive365.co.uk/plugin/player/player_manual.html";
+#define PLUGIN_VERSION	"5.1.0"
+char RADIO_PLAYER_URL[] = "https://player.hive365.radio/minimal";
 #define DEFAULT_RADIO_VOLUME 20
 
 //Timer defines
@@ -31,8 +28,8 @@ Menu menuVolume;
 Menu menuTuned;
 
 //Tracked Information
-char szEncodedHostname[256];
-char szEncodedHostPort[16];
+char szHostname[256];
+char szHostPort[16];
 char szCurrentSong[256];
 char szCurrentDJ[64];
 bool bIsTunedIn[MAXPLAYERS+1];
@@ -65,15 +62,13 @@ enum SocketInfo
 	SocketInfo_HeartBeat,
 };
 
-char szEncodedHostip[128] = "";
-
 public Plugin myinfo = 
 {
 	name = "Hive365 Player",
-	author = "Hive365.co.uk",
+	author = "Hive365.radio",
 	description = "Hive365 In-Game Radio Player",
 	version = PLUGIN_VERSION,
-	url = "https://www.hive365.co.uk"
+	url = "https://hive365.radio"
 }
 
 public void OnPluginStart()
@@ -141,18 +136,16 @@ public void OnPluginStart()
 	menuHelp.ExitButton = true;
 	
 	ConVar hostname = FindConVar("hostname");
-	
+
 	if(hostname)
 	{
 		char szHostname[128];
 		hostname.GetString(szHostname, sizeof(szHostname));
-		EncodeBase64(szEncodedHostname, sizeof(szEncodedHostname), szHostname);
 		hostname.AddChangeHook(HookHostnameChange);
 	}
 	
 	char szPort[10];
 	FindConVar("hostport").GetString(szPort, sizeof(szPort));
-	EncodeBase64(szEncodedHostPort, sizeof(szEncodedHostPort), szPort);
 	
 	ConVar showInfo = FindConVar("host_info_show");//CS:GO Only... for now
 	if(showInfo)
@@ -219,25 +212,6 @@ public void HookShowInfo(ConVar convar, const char[] oldValue, const char[] newV
 	if(convar.IntValue < 1)
 	{
 		convar.IntValue = 1;
-	}
-}
-
-public void SteamWorks_SteamServersConnected()
-{
-	if(GetFeatureStatus(FeatureType_Native, "SteamWorks_GetPublicIP") == FeatureStatus_Available)
-	{
-		int ipParts[4];
-		if(SteamWorks_GetPublicIP(ipParts))
-		{
-			char ip[20];
-			char encodedIP[128];
-			
-			Format(ip, sizeof(ip), "%i.%i.%i.%i", ipParts[0], ipParts[1], ipParts[2], ipParts[3]);
-			EncodeBase64(encodedIP, sizeof(encodedIP), ip);
-			
-			Format(szEncodedHostip, sizeof(szEncodedHostip), "&ip=%s", encodedIP);
-			MakeSocketRequest(SocketInfo_HeartBeat);
-		}
 	}
 }
 
@@ -621,7 +595,7 @@ void MakeSocketRequest(SocketInfo type, int serial = 0, const char [] buffer = "
 	if(type == SocketInfo_HeartBeat)
 	{
 		SocketSetArg(socket, pack);
-		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "data.hive365.co.uk", 80);
+		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "http-backend.hive365radio.com", 80);
 		return;
 	}
 	else if(type != SocketInfo_Info)
@@ -634,18 +608,19 @@ void MakeSocketRequest(SocketInfo type, int serial = 0, const char [] buffer = "
 	
 	if(type == SocketInfo_Info)
 	{
-		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "data.hive365.co.uk", 80);
+		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "http-backend.hive365radio.com", 80);
 	}
 	else
 	{
-		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "www.hive365.co.uk", 80);
+		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "hive365.radio", 80);
 	}
 }
 
-void SendSocketRequest(Handle socket, char [] request, char [] host)
+void SendSocketRequest(Handle socket, char [] method, char [] requestPath, char[] requestJSON, char [] host)
 {
 	char requestStr[2048];
-	Format(requestStr, sizeof(requestStr), "GET /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", request, host);
+	Format(requestStr, sizeof(requestStr), "%s /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", method, requestPath, host);
+	LogError("Request: %s", requestStr);
 	
 	SocketSend(socket, requestStr);
 }
@@ -653,10 +628,14 @@ void SendSocketRequest(Handle socket, char [] request, char [] host)
 void ParseSocketInfo(char [] receivedData)
 {
 	char song[256] = "Unknown";
+	char artist[256] = "Unknown";
+	char artist_song[256] = "Unknown";
 	char dj[64] = "AutoDj";
 	
 	// //Get the actual json we need
 	int startOfJson = StrContains(receivedData, "{");
+
+
 	
 	if(startOfJson)
 	{
@@ -664,17 +643,24 @@ void ParseSocketInfo(char [] receivedData)
 		strcopy(JsonData, sizeof(JsonData), receivedData[startOfJson-1]);
 
 		JSON_Object JsonObject = json_decode(JsonData);
-		JSON_Object StreamInfo = JsonObject.GetObject("info");
+		JSON_Object infoObject = JsonObject.GetObject("info");
 
-		StreamInfo.GetString("artist_song", song, sizeof(song));
+
+
+		infoObject.GetString("title", song, sizeof(song));
+		infoObject.GetString("artist", artist, sizeof(artist));
 		DecodeHTMLEntities(song, sizeof(song));
-		if(!StrEqual(song, szCurrentSong, false))
+		DecodeHTMLEntities(artist, sizeof(artist));
+
+		Format(artist_song, sizeof(artist_song), "%s - %s", artist, song);
+
+		if(!StrEqual(artist_song, szCurrentSong, false))
 		{
-			strcopy(szCurrentSong, sizeof(szCurrentSong), song);
+			strcopy(szCurrentSong, sizeof(szCurrentSong), artist_song);
 			PrintToChatAll("\x01[\x04Hive365\x01] \x04Now Playing: %s", szCurrentSong);
 		}
 
-		StreamInfo.GetString("title", dj, sizeof(dj));
+		infoObject.GetString("streamer", dj, sizeof(dj));
 		DecodeHTMLEntities(dj, sizeof(dj));
 		if(!StrEqual(dj, szCurrentDJ, false))
 		{
@@ -721,12 +707,12 @@ public OnSocketConnected(Handle socket, any pack)
 		
 		Format(urlRequest, sizeof(urlRequest), "addServer.php?port=%s&version=%s", szEncodedHostPort, buffer);
 		
-		SendSocketRequest(socket, urlRequest, "data.hive365.co.uk");
+		SendSocketRequest(socket, "PUT", urlRequest, "http-backend.hive365radio.com");
 		return;
 	}
 	else if(type == SocketInfo_Info)
 	{
-		SendSocketRequest(socket, "stream/info.php", "data.hive365.co.uk");
+		SendSocketRequest(socket, "GET", "streamInfo/simple", "http-backend.hive365radio.com");
 		return;
 	}
 	else
@@ -779,7 +765,7 @@ public OnSocketConnected(Handle socket, any pack)
 			Format(urlRequest, sizeof(urlRequest), "plugin/song_rate.php?n=%s&t=4&host=%s", szEncodedName, szEncodedHostname);
 		}
 		
-		SendSocketRequest(socket, urlRequest, "www.hive365.co.uk");
+		SendSocketRequest(socket, "POST", urlRequest, "http-backend.hive365radio.com");
 		return;
 	}
 
