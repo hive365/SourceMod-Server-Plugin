@@ -588,94 +588,94 @@ void LoadMOTDPanel(int client, const char [] title, const char [] page, bool dis
 	delete kv;
 }
 
-void MakeSocketRequest(SocketInfo type, int serial = 0, const char [] buffer = "")
-{
-	Handle socket = SocketCreate(SOCKET_TCP, OnSocketError);
+// void MakeSocketRequest(SocketInfo type, int serial = 0, const char [] buffer = "")
+// {
+// 	Handle socket = SocketCreate(SOCKET_TCP, OnSocketError);
 	
-	DataPack pack = CreateDataPack();
+// 	DataPack pack = CreateDataPack();
 	
-	pack.WriteCell(view_as<any>(type));
+// 	pack.WriteCell(view_as<any>(type));
 	
-	if(type == SocketInfo_HeartBeat)
-	{
-		SocketSetArg(socket, pack);
-		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "http-backend.hive365radio.com", 80);
-		return;
-	}
-	else if(type != SocketInfo_Info)
-	{
-		pack.WriteCell(serial);
-		pack.WriteString(buffer);
-	}
+// 	if(type == SocketInfo_HeartBeat)
+// 	{
+// 		SocketSetArg(socket, pack);
+// 		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "http-backend.hive365radio.com", 80);
+// 		return;
+// 	}
+// 	else if(type != SocketInfo_Info)
+// 	{
+// 		pack.WriteCell(serial);
+// 		pack.WriteString(buffer);
+// 	}
 	
-	SocketSetArg(socket, pack);
+// 	SocketSetArg(socket, pack);
 	
-	if(type == SocketInfo_Info)
-	{
-		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "http-backend.hive365radio.com", 80);
-	}
-	else
-	{
-		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "hive365.radio", 80);
-	}
-}
+// 	if(type == SocketInfo_Info)
+// 	{
+// 		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "http-backend.hive365radio.com", 80);
+// 	}
+// 	else
+// 	{
+// 		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "hive365.radio", 80);
+// 	}
+// }
 
-void SendSocketRequest(Handle socket, char [] method, char [] request, char [] host)
-{
-	char requestStr[2048];
-	Format(requestStr, sizeof(requestStr), "%s /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", method, request, host);
-	LogError("Request: %s", requestStr);
+// void SendSocketRequest(Handle socket, char [] method, char [] request, char [] host)
+// {
+// 	char requestStr[2048];
+// 	Format(requestStr, sizeof(requestStr), "%s /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", method, request, host);
+// 	LogError("Request: %s", requestStr);
 	
-	SocketSend(socket, requestStr);
-}
+// 	SocketSend(socket, requestStr);
+// }
 
-void ParseSocketInfo(char [] receivedData)
-{
-	char song[256] = "Unknown";
-	char artist[256] = "Unknown";
-	char artist_song[256] = "Unknown";
-	char dj[64] = "AutoDj";
+// void ParseSocketInfo(char [] receivedData)
+// {
+// 	char song[256] = "Unknown";
+// 	char artist[256] = "Unknown";
+// 	char artist_song[256] = "Unknown";
+// 	char dj[64] = "AutoDj";
 	
-	// //Get the actual json we need
-	int startOfJson = StrContains(receivedData, "{");
+// 	// //Get the actual json we need
+// 	int startOfJson = StrContains(receivedData, "{");
 
 
 	
-	if(startOfJson)
-	{
-		char JsonData[4096];
-		strcopy(JsonData, sizeof(JsonData), receivedData[startOfJson-1]);
+// 	if(startOfJson)
+// 	{
+// 		char JsonData[4096];
+// 		strcopy(JsonData, sizeof(JsonData), receivedData[startOfJson-1]);
 
-		JSON_Object JsonObject = json_decode(JsonData);
-		JSON_Object infoObject = JsonObject.GetObject("info");
+// 		JSON_Object JsonObject = json_decode(JsonData);
+// 		JSON_Object infoObject = JsonObject.GetObject("info");
 
 
 
-		infoObject.GetString("title", song, sizeof(song));
-		infoObject.GetString("artist", artist, sizeof(artist));
-		DecodeHTMLEntities(song, sizeof(song));
-		DecodeHTMLEntities(artist, sizeof(artist));
+// 		infoObject.GetString("title", song, sizeof(song));
+// 		infoObject.GetString("artist", artist, sizeof(artist));
+// 		DecodeHTMLEntities(song, sizeof(song));
+// 		DecodeHTMLEntities(artist, sizeof(artist));
 
-		Format(artist_song, sizeof(artist_song), "%s - %s", artist, song);
+// 		Format(artist_song, sizeof(artist_song), "%s - %s", artist, song);
 
-		if(!StrEqual(artist_song, szCurrentSong, false))
-		{
-			strcopy(szCurrentSong, sizeof(szCurrentSong), artist_song);
-			PrintToChatAll("\x01[\x04Hive365\x01] \x04Now Playing: %s", szCurrentSong);
-		}
+// 		if(!StrEqual(artist_song, szCurrentSong, false))
+// 		{
+// 			strcopy(szCurrentSong, sizeof(szCurrentSong), artist_song);
+// 			PrintToChatAll("\x01[\x04Hive365\x01] \x04Now Playing: %s", szCurrentSong);
+// 		}
 
-		infoObject.GetString("streamer", dj, sizeof(dj));
-		DecodeHTMLEntities(dj, sizeof(dj));
-		if(!StrEqual(dj, szCurrentDJ, false))
-		{
-			strcopy(szCurrentDJ, sizeof(szCurrentDJ), dj);
-			stringmapDJFTW.Clear();
-			PrintToChatAll("\x01[\x04Hive365\x01] \x04Your DJ is: %s", szCurrentDJ);
-		}
+// 		infoObject.GetString("streamer", dj, sizeof(dj));
+// 		DecodeHTMLEntities(dj, sizeof(dj));
+// 		if(!StrEqual(dj, szCurrentDJ, false))
+// 		{
+// 			strcopy(szCurrentDJ, sizeof(szCurrentDJ), dj);
+// 			stringmapDJFTW.Clear();
+// 			PrintToChatAll("\x01[\x04Hive365\x01] \x04Your DJ is: %s", szCurrentDJ);
+// 		}
 
-		json_cleanup_and_delete(JsonObject);
-	}
-}
+// 		json_cleanup_and_delete(JsonObject);
+// 	}
+// }
 
 void DecodeHTMLEntities(char [] str, int size)
 {
@@ -693,81 +693,12 @@ void DecodeHTMLEntities(char [] str, int size)
 	}
 }
 
-//Socket Handlers
-#pragma newdecls optional
-
-public OnSocketConnected(Handle socket, any pack) 
-{
-	char urlRequest[1024];
-	(view_as<DataPack>(pack)).Reset();
-	
-	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
-	
-	if(type == SocketInfo_HeartBeat)
-	{
-		char buffer[64];
-		
-		EncodeBase64(buffer, sizeof(buffer), PLUGIN_VERSION);
-		
-		Format(urlRequest, sizeof(urlRequest), "addServer.php?port=%s&version=%s", szEncodedHostPort, buffer);
-		
-		SendSocketRequest(socket, "PUT", urlRequest, "http-backend.hive365radio.com");
-		return;
-	}
-	else if(type == SocketInfo_Info)
-	{
-		SendSocketRequest(socket, "GET", "streamInfo/simple", "http-backend.hive365radio.com");
-		return;
-	}
-	else
-	{
-		int client = GetClientFromSerial((view_as<DataPack>(pack)).ReadCell());
-		char szUsername[MAX_NAME_LENGTH];
-		char urlRequest[128];
-
-		if(client == 0 || !IsClientInGame(client) || !GetClientName(client, szUsername, sizeof(szUsername)))
-		{
-			return;
-		}
-		
-		if(type == SocketInfo_DjFtw)
-		{
-			urlRequest = "rating/streamer";
-			SendHTTPRequest(urlRequest, szUsername, szHostname);
-		}
-		else if(type == SocketInfo_Request)
-		{
-			urlRequest = "songrequest";
-			Format(urlRequest, sizeof(urlRequest), "plugin/request.php?n=%s&s=%s&host=%s", szUsername, szEncodedData, szHostname);
-		}
-		else if(type == SocketInfo_Shoutout)
-		{
-			urlRequest = "shoutout";
-			Format(urlRequest, sizeof(urlRequest), "plugin/shoutout.php?n=%s&s=%s&host=%s", szUsername, szEncodedData, szHostname);
-		}
-		else if(type == SocketInfo_Choon || type == SocketInfo_Poon)
-			{
-			char rateType[8];
-			urlRequest = "rating/song";
-			if(type == SocketInfo_Choon)
-			{
-				rateType = "CHOON";
-			}
-			else
-			{
-				rateType = "POON";
-			}
-			SendHTTPRequest(urlRequest, szUsername, szHostname, rateType);
-			}
-		return;
-	}
-
-}
-
 public void SendHTTPRequest(urlRequest, name, source, message)
 // Matching properties to be closer to what the API expects to assist in writing the function to be more coherent when looking back at it.
 {
-	
+	HTTPRequest request = new HTTPRequest(urlRequest);
+	request.Get(OnTodoReceived);
+	return;
 }
 
 // public char[] Format()
@@ -793,60 +724,130 @@ void OnTodoReceived(HTTPResponse response, any value)
     PrintToServer("Retrieved todo with title '%s'", title);
 } 
 
+//Socket Handlers
+#pragma newdecls optional
 
-public OnSocketReceive(Handle socket, char [] receivedData, const int dataSize, any pack) 
-{
-	(view_as<DataPack>(pack)).Reset();
-	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
+// public OnSocketConnected(Handle socket, any pack) 
+// {
+// 	char urlRequest[1024];
+// 	(view_as<DataPack>(pack)).Reset();
 	
-	if(type == SocketInfo_Info)
-	{
-		ParseSocketInfo(receivedData);
-	}
-}
-
-public OnSocketDisconnected(Handle socket, any pack) 
-{
-	(view_as<DataPack>(pack)).Reset();
-	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
+// 	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
 	
-	if(type == SocketInfo_Request || type == SocketInfo_Shoutout || type == SocketInfo_DjFtw)
-	{
-		int client = GetClientFromSerial((view_as<DataPack>(pack)).ReadCell());
+// 	if(type == SocketInfo_HeartBeat)
+// 	{
+// 		char buffer[64];
 		
-		if(client != 0 && IsClientInGame(client))
-		{
-			if(type == SocketInfo_DjFtw)
-			{
-				PrintToChatAll("\x01[\x04Hive365\x01] \x04%N thinks %s is a banging DJ!", client, szCurrentDJ);
-			}
-			else if(type == SocketInfo_Shoutout)
-			{
-				PrintToChat(client, "\x01[\x04Hive365\x01] \x04Your Shoutout has been sent!");
-			}
-			else
-			{
-				PrintToChat(client, "\x01[\x04Hive365\x01] \x04Your Request has been sent!");
-			}
-		}
-	}
-	
-	delete view_as<DataPack>(pack);
-	delete socket;
-}
+// 		EncodeBase64(buffer, sizeof(buffer), PLUGIN_VERSION);
+		
+// 		Format(urlRequest, sizeof(urlRequest), "addServer.php?port=%s&version=%s", szEncodedHostPort, buffer);
+		
+// 		SendSocketRequest(socket, "PUT", urlRequest, "http-backend.hive365radio.com");
+// 		return;
+// 	}
+// 	else if(type == SocketInfo_Info)
+// 	{
+// 		SendSocketRequest(socket, "GET", "streamInfo/simple", "http-backend.hive365radio.com");
+// 		return;
+// 	}
+// 	else
+// 	{
+// 		int client = GetClientFromSerial((view_as<DataPack>(pack)).ReadCell());
+// 		char szUsername[MAX_NAME_LENGTH];
+// 		char urlRequest[128];
 
-public OnSocketError(Handle socket, const int errorType, const int errorNum, any pack) 
-{
-	(view_as<DataPack>(pack)).Reset();
-	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
+// 		if(client == 0 || !IsClientInGame(client) || !GetClientName(client, szUsername, sizeof(szUsername)))
+// 		{
+// 			return;
+// 		}
+		
+// 		if(type == SocketInfo_DjFtw)
+// 		{
+// 			urlRequest = "rating/streamer";
+// 			SendHTTPRequest(urlRequest, szUsername, szHostname);
+// 		}
+// 		else if(type == SocketInfo_Request)
+// 		{
+// 			urlRequest = "songrequest";
+// 			Format(urlRequest, sizeof(urlRequest), "plugin/request.php?n=%s&s=%s&host=%s", szUsername, szEncodedData, szHostname);
+// 		}
+// 		else if(type == SocketInfo_Shoutout)
+// 		{
+// 			urlRequest = "shoutout";
+// 			Format(urlRequest, sizeof(urlRequest), "plugin/shoutout.php?n=%s&s=%s&host=%s", szUsername, szEncodedData, szHostname);
+// 		}
+// 		else if(type == SocketInfo_Choon || type == SocketInfo_Poon)
+// 			{
+// 			char rateType[8];
+// 			urlRequest = "rating/song";
+// 			if(type == SocketInfo_Choon)
+// 			{
+// 				rateType = "CHOON";
+// 			}
+// 			else
+// 			{
+// 				rateType = "POON";
+// 			}
+// 			SendHTTPRequest(urlRequest, szUsername, szHostname, rateType);
+// 			}
+// 		return;
+// 	}
+
+// }
+
+// public OnSocketReceive(Handle socket, char [] receivedData, const int dataSize, any pack) 
+// {
+// 	(view_as<DataPack>(pack)).Reset();
+// 	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
 	
-	if(type == SocketInfo_Info)
-	{
-		strcopy(szCurrentSong, sizeof(szCurrentSong), "Unknown");
-		strcopy(szCurrentDJ, sizeof(szCurrentDJ), "AutoDj");
-	}
-	LogError("[Hive365] socket error %d (errno %d)", errorType, errorNum);
+// 	if(type == SocketInfo_Info)
+// 	{
+// 		ParseSocketInfo(receivedData);
+// 	}
+// }
+
+// public OnSocketDisconnected(Handle socket, any pack) 
+// {
+// 	(view_as<DataPack>(pack)).Reset();
+// 	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
 	
-	delete view_as<DataPack>(pack);
-	delete socket;
-}
+// 	if(type == SocketInfo_Request || type == SocketInfo_Shoutout || type == SocketInfo_DjFtw)
+// 	{
+// 		int client = GetClientFromSerial((view_as<DataPack>(pack)).ReadCell());
+		
+// 		if(client != 0 && IsClientInGame(client))
+// 		{
+// 			if(type == SocketInfo_DjFtw)
+// 			{
+// 				PrintToChatAll("\x01[\x04Hive365\x01] \x04%N thinks %s is a banging DJ!", client, szCurrentDJ);
+// 			}
+// 			else if(type == SocketInfo_Shoutout)
+// 			{
+// 				PrintToChat(client, "\x01[\x04Hive365\x01] \x04Your Shoutout has been sent!");
+// 			}
+// 			else
+// 			{
+// 				PrintToChat(client, "\x01[\x04Hive365\x01] \x04Your Request has been sent!");
+// 			}
+// 		}
+// 	}
+	
+// 	delete view_as<DataPack>(pack);
+// 	delete socket;
+// }
+
+// public OnSocketError(Handle socket, const int errorType, const int errorNum, any pack) 
+// {
+// 	(view_as<DataPack>(pack)).Reset();
+// 	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
+	
+// 	if(type == SocketInfo_Info)
+// 	{
+// 		strcopy(szCurrentSong, sizeof(szCurrentSong), "Unknown");
+// 		strcopy(szCurrentDJ, sizeof(szCurrentDJ), "AutoDj");
+// 	}
+// 	LogError("[Hive365] socket error %d (errno %d)", errorType, errorNum);
+	
+// 	delete view_as<DataPack>(pack);
+// 	delete socket;
+// }
