@@ -171,6 +171,10 @@ public void OnPluginStart()
 	{
 		Updater_AddPlugin(UPDATE_URL);
 	}
+
+	HTTPRequest request = new HTTPRequest("https://jsonplaceholder.typicode.com/todos/1");
+
+    request.Get(OnTodoReceived);
 }
 
 public void OnLibraryAdded(const char[] name)
@@ -202,10 +206,10 @@ public void OnClientPutInServer(int client)
 	CreateTimer(HELP_TIMER_DELAY, HelpMessage, serial, TIMER_FLAG_NO_MAPCHANGE);
 }
 
-public void HookHostnameChange(ConVar convar, const char[] oldValue, const char[] newValue)
-{
-	EncodeBase64(szEncodedHostname, sizeof(szEncodedHostname), newValue);
-}
+// public void HookHostnameChange(ConVar convar, const char[] oldValue, const char[] newValue)
+// {
+// 	EncodeBase64(szEncodedHostname, sizeof(szEncodedHostname), newValue);
+// }
 
 public void HookShowInfo(ConVar convar, const char[] oldValue, const char[] newValue)
 {
@@ -721,7 +725,7 @@ public OnSocketConnected(Handle socket, any pack)
 		char szUsername[MAX_NAME_LENGTH];
 		char urlRequest[128];
 
-		if(client == 0 || !IsClientInGame(client) || !GetClientName(client, name, sizeof(name)))
+		if(client == 0 || !IsClientInGame(client) || !GetClientName(client, szUsername, sizeof(szUsername)))
 		{
 			return;
 		}
@@ -759,6 +763,35 @@ public OnSocketConnected(Handle socket, any pack)
 	}
 
 }
+
+public void SendHTTPRequest()
+{
+	
+}
+
+// public char[] Format()
+// {
+
+// }
+
+// temp
+
+void OnTodoReceived(HTTPResponse response, any value)
+{
+    if (response.Status != HTTPStatus_OK) {
+        // Failed to retrieve todo
+        return;
+    }
+
+    // Indicate that the response contains a JSON object
+    JSONObject todo = view_as<JSONObject>(response.Data);
+
+    char title[256];
+    todo.GetString("title", title, sizeof(title));
+
+    PrintToServer("Retrieved todo with title '%s'", title);
+} 
+
 
 public OnSocketReceive(Handle socket, char [] receivedData, const int dataSize, any pack) 
 {
