@@ -51,15 +51,15 @@ enum RadioOptions
 	Radio_Help,
 };
 
-enum SocketInfo
+enum RequestInfo
 {
-	SocketInfo_Info,
-	SocketInfo_Request,
-	SocketInfo_Shoutout,
-	SocketInfo_Choon,
-	SocketInfo_Poon,
-	SocketInfo_DjFtw,
-	SocketInfo_HeartBeat,
+	RequestInfo_Info,
+	RequestInfo_Request,
+	RequestInfo_Shoutout,
+	RequestInfo_Choon,
+	RequestInfo_Poon,
+	RequestInfo_DjFtw,
+	RequestInfo_HeartBeat,
 };
 
 public Plugin myinfo = 
@@ -141,7 +141,7 @@ public void OnPluginStart()
 	{
 		char szHostname[128];
 		hostname.GetString(szHostname, sizeof(szHostname));
-		hostname.AddChangeHook(HookHostnameChange);
+		// hostname.AddChangeHook(HookHostnameChange);
 	}
 	
 	char szPort[10];
@@ -174,7 +174,7 @@ public void OnPluginStart()
 
 	HTTPRequest request = new HTTPRequest("https://jsonplaceholder.typicode.com/todos/1");
 
-    request.Get(OnTodoReceived);
+	request.Get(OnTodoReceived);
 }
 
 public void OnLibraryAdded(const char[] name)
@@ -629,53 +629,53 @@ void LoadMOTDPanel(int client, const char [] title, const char [] page, bool dis
 // 	SocketSend(socket, requestStr);
 // }
 
-// void ParseSocketInfo(char [] receivedData)
-// {
-// 	char song[256] = "Unknown";
-// 	char artist[256] = "Unknown";
-// 	char artist_song[256] = "Unknown";
-// 	char dj[64] = "AutoDj";
+void ParseSocketInfo(char [] receivedData)
+{
+	char song[256] = "Unknown";
+	char artist[256] = "Unknown";
+	char artist_song[256] = "Unknown";
+	char dj[64] = "AutoDj";
 	
-// 	// //Get the actual json we need
-// 	int startOfJson = StrContains(receivedData, "{");
+	// //Get the actual json we need
+	int startOfJson = StrContains(receivedData, "{");
 
 
 	
-// 	if(startOfJson)
-// 	{
-// 		char JsonData[4096];
-// 		strcopy(JsonData, sizeof(JsonData), receivedData[startOfJson-1]);
+	if(startOfJson)
+	{
+		char JsonData[4096];
+		strcopy(JsonData, sizeof(JsonData), receivedData[startOfJson-1]);
 
-// 		JSON_Object JsonObject = json_decode(JsonData);
-// 		JSON_Object infoObject = JsonObject.GetObject("info");
+		JSONObject JsonObject = json_decode(JsonData);
+		JSONObject infoObject = JsonObject.GetObject("info");
 
 
 
-// 		infoObject.GetString("title", song, sizeof(song));
-// 		infoObject.GetString("artist", artist, sizeof(artist));
-// 		DecodeHTMLEntities(song, sizeof(song));
-// 		DecodeHTMLEntities(artist, sizeof(artist));
+		infoObject.GetString("title", song, sizeof(song));
+		infoObject.GetString("artist", artist, sizeof(artist));
+		DecodeHTMLEntities(song, sizeof(song));
+		DecodeHTMLEntities(artist, sizeof(artist));
 
-// 		Format(artist_song, sizeof(artist_song), "%s - %s", artist, song);
+		Format(artist_song, sizeof(artist_song), "%s - %s", artist, song);
 
-// 		if(!StrEqual(artist_song, szCurrentSong, false))
-// 		{
-// 			strcopy(szCurrentSong, sizeof(szCurrentSong), artist_song);
-// 			PrintToChatAll("\x01[\x04Hive365\x01] \x04Now Playing: %s", szCurrentSong);
-// 		}
+		if(!StrEqual(artist_song, szCurrentSong, false))
+		{
+			strcopy(szCurrentSong, sizeof(szCurrentSong), artist_song);
+			PrintToChatAll("\x01[\x04Hive365\x01] \x04Now Playing: %s", szCurrentSong);
+		}
 
-// 		infoObject.GetString("streamer", dj, sizeof(dj));
-// 		DecodeHTMLEntities(dj, sizeof(dj));
-// 		if(!StrEqual(dj, szCurrentDJ, false))
-// 		{
-// 			strcopy(szCurrentDJ, sizeof(szCurrentDJ), dj);
-// 			stringmapDJFTW.Clear();
-// 			PrintToChatAll("\x01[\x04Hive365\x01] \x04Your DJ is: %s", szCurrentDJ);
-// 		}
+		infoObject.GetString("streamer", dj, sizeof(dj));
+		DecodeHTMLEntities(dj, sizeof(dj));
+		if(!StrEqual(dj, szCurrentDJ, false))
+		{
+			strcopy(szCurrentDJ, sizeof(szCurrentDJ), dj);
+			stringmapDJFTW.Clear();
+			PrintToChatAll("\x01[\x04Hive365\x01] \x04Your DJ is: %s", szCurrentDJ);
+		}
 
-// 		json_cleanup_and_delete(JsonObject);
-// 	}
-// }
+		json_cleanup_and_delete(JsonObject);
+	}
+}
 
 void DecodeHTMLEntities(char [] str, int size)
 {
@@ -693,18 +693,13 @@ void DecodeHTMLEntities(char [] str, int size)
 	}
 }
 
-public void SendHTTPRequest(urlRequest, name, source, message)
 // Matching properties to be closer to what the API expects to assist in writing the function to be more coherent when looking back at it.
+void SendHTTPRequest(urlRequest, name, source, message)
 {
 	HTTPRequest request = new HTTPRequest(urlRequest);
 	request.Get(OnTodoReceived);
 	return;
 }
-
-// public char[] Format()
-// {
-
-// }
 
 // temp
 
@@ -721,8 +716,67 @@ void OnTodoReceived(HTTPResponse response, any value)
     char title[256];
     todo.GetString("title", title, sizeof(title));
 
-    PrintToServer("Retrieved todo with title '%s'", title);
-} 
+	RequestInfo type = view_as<RequestInfo>((view_as<DataPack>(pack)).ReadCell());
+	
+	if(type == SocketInfo_HeartBeat)
+	{
+		char buffer[64];
+		
+		EncodeBase64(buffer, sizeof(buffer), PLUGIN_VERSION);
+		
+		Format(urlRequest, sizeof(urlRequest), "addServer.php?port=%s&version=%s", szEncodedHostPort, buffer);
+		
+		SendSocketRequest(socket, "PUT", urlRequest, "http-backend.hive365radio.com");
+		return;
+	}
+	else if(type == SocketInfo_Info)
+	{
+		SendSocketRequest(socket, "GET", "streamInfo/simple", "http-backend.hive365radio.com");
+		return;
+	}
+	else
+	{
+		int client = GetClientFromSerial((view_as<DataPack>(pack)).ReadCell());
+		char szUsername[MAX_NAME_LENGTH];
+		char urlRequest[128];
+
+		if(client == 0 || !IsClientInGame(client) || !GetClientName(client, szUsername, sizeof(szUsername)))
+		{
+			return;
+		}
+		
+		if(type == SocketInfo_DjFtw)
+		{
+			urlRequest = "rating/streamer";
+			SendHTTPRequest(urlRequest, szUsername, szHostname);
+		}
+		else if(type == SocketInfo_Request)
+		{
+			urlRequest = "songrequest";
+			Format(urlRequest, sizeof(urlRequest), "plugin/request.php?n=%s&s=%s&host=%s", szUsername, szEncodedData, szHostname);
+		}
+		else if(type == SocketInfo_Shoutout)
+		{
+			urlRequest = "shoutout";
+			Format(urlRequest, sizeof(urlRequest), "plugin/shoutout.php?n=%s&s=%s&host=%s", szUsername, szEncodedData, szHostname);
+		}
+		else if(type == SocketInfo_Choon || type == SocketInfo_Poon)
+			{
+			char rateType[8];
+			urlRequest = "rating/song";
+			if(type == SocketInfo_Choon)
+			{
+				rateType = "CHOON";
+			}
+			else
+			{
+				rateType = "POON";
+			}
+			SendHTTPRequest(urlRequest, szUsername, szHostname, rateType);
+			}
+		return;
+	}
+}
 
 //Socket Handlers
 #pragma newdecls optional
