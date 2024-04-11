@@ -757,14 +757,14 @@ public OnSocketConnected(Handle socket, any pack)
 			{
 				rateType = "POON";
 			}
-			SendHTTPRequest(urlRequest, rateType, szUsername, szHostname);
+			SendHTTPRequest(urlRequest, szUsername, szHostname, rateType);
 			}
 		return;
 	}
 
 }
 
-public void SendHTTPRequest(urlRequest, message, name, source)
+public void SendHTTPRequest(urlRequest, name, source, message)
 // Matching properties to be closer to what the API expects to assist in writing the function to be more coherent when looking back at it.
 {
 	
