@@ -54,7 +54,7 @@ enum RadioOptions
 enum RequestInfo
 {
 	RequestInfo_Info,
-	RequestInfo_Request,
+	RequestInfo_SongRequest,
 	RequestInfo_Shoutout,
 	RequestInfo_Choon,
 	RequestInfo_Poon,
@@ -171,10 +171,6 @@ public void OnPluginStart()
 	{
 		Updater_AddPlugin(UPDATE_URL);
 	}
-
-	HTTPRequest request = new HTTPRequest("https://jsonplaceholder.typicode.com/todos/1");
-
-	request.Get(OnTodoReceived);
 }
 
 public void OnLibraryAdded(const char[] name)
@@ -588,46 +584,47 @@ void LoadMOTDPanel(int client, const char [] title, const char [] page, bool dis
 	delete kv;
 }
 
-// void MakeSocketRequest(SocketInfo type, int serial = 0, const char [] buffer = "")
-// {
-// 	Handle socket = SocketCreate(SOCKET_TCP, OnSocketError);
+/*
+void MakeSocketRequest(SocketInfo type, int serial = 0, const char [] buffer = "")
+{
+	Handle socket = SocketCreate(SOCKET_TCP, OnSocketError);
 	
-// 	DataPack pack = CreateDataPack();
+	DataPack pack = CreateDataPack();
 	
-// 	pack.WriteCell(view_as<any>(type));
+	pack.WriteCell(view_as<any>(type));
 	
-// 	if(type == SocketInfo_HeartBeat)
-// 	{
-// 		SocketSetArg(socket, pack);
-// 		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "http-backend.hive365radio.com", 80);
-// 		return;
-// 	}
-// 	else if(type != SocketInfo_Info)
-// 	{
-// 		pack.WriteCell(serial);
-// 		pack.WriteString(buffer);
-// 	}
+	if(type == SocketInfo_HeartBeat)
+	{
+		SocketSetArg(socket, pack);
+		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "http-backend.hive365radio.com", 80);
+		return;
+	}
+	else if(type != SocketInfo_Info)
+	{
+		pack.WriteCell(serial);
+		pack.WriteString(buffer);
+	}
 	
-// 	SocketSetArg(socket, pack);
+	SocketSetArg(socket, pack);
 	
-// 	if(type == SocketInfo_Info)
-// 	{
-// 		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "http-backend.hive365radio.com", 80);
-// 	}
-// 	else
-// 	{
-// 		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "hive365.radio", 80);
-// 	}
-// }
+	if(type == SocketInfo_Info)
+	{
+		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "http-backend.hive365radio.com", 80);
+	}
+	else
+	{
+		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "hive365.radio", 80);
+	}
+}
 
-// void SendSocketRequest(Handle socket, char [] method, char [] request, char [] host)
-// {
-// 	char requestStr[2048];
-// 	Format(requestStr, sizeof(requestStr), "%s /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", method, request, host);
-// 	LogError("Request: %s", requestStr);
+void SendSocketRequest(Handle socket, char [] method, char [] request, char [] host)
+{
+	char requestStr[2048];
+	Format(requestStr, sizeof(requestStr), "%s /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", method, request, host);
+	LogError("Request: %s", requestStr);
 	
-// 	SocketSend(socket, requestStr);
-// }
+	SocketSend(socket, requestStr);
+}
 
 void ParseSocketInfo(char [] receivedData)
 {
@@ -675,7 +672,7 @@ void ParseSocketInfo(char [] receivedData)
 
 		json_cleanup_and_delete(JsonObject);
 	}
-}
+}*/
 
 void DecodeHTMLEntities(char [] str, int size)
 {
@@ -693,16 +690,42 @@ void DecodeHTMLEntities(char [] str, int size)
 	}
 }
 
-// Matching properties to be closer to what the API expects to assist in writing the function to be more coherent when looking back at it.
-void SendHTTPRequest(urlRequest, name, source, message)
+/*
+Sends out the full HTTP Request using GET, PUT, or POST.
+@param requestMethod Either "GET", "PUT", or "POST" to tell the function which request to send
+@param urlRequest The URL that will be requested
+@param name In the event that a PUT request is being made, this will be the name that goes into the json.
+*/
+void SendHTTPRequest(char[] requestMethod, char[] urlRequest, char[] name = "", source = "", char[] message = "")
 {
 	HTTPRequest request = new HTTPRequest(urlRequest);
-	request.Get(OnTodoReceived);
+	
+	switch(requestMethod) {
+		case "GET": 
+		{
+			request.Get(OnTodoReceived);
+			return;
+		}
+		case "PUT":
+		{
+			return;
+		}
+		case "POST":
+		{
+			return;
+		}
+	}
+
 	return;
 }
 
-// temp
+// come back to this
+void MakeHTTPRequest(RequestInfo requestType)
+{
+	return;
+}
 
+// This will be the function run when SendHTTPRequest is called and the request is made.
 void OnTodoReceived(HTTPResponse response, any value)
 {
     if (response.Status != HTTPStatus_OK) {
@@ -717,6 +740,78 @@ void OnTodoReceived(HTTPResponse response, any value)
     todo.GetString("title", title, sizeof(title));
 
 	RequestInfo type = view_as<RequestInfo>((view_as<DataPack>(pack)).ReadCell());
+	
+	if(type == RequestInfo_HeartBeat)
+	{
+		char buffer[64];
+		
+		EncodeBase64(buffer, sizeof(buffer), PLUGIN_VERSION);
+		
+		Format(urlRequest, sizeof(urlRequest), "addServer.php?port=%s&version=%s", szEncodedHostPort, buffer);
+		
+		SendSocketRequest(socket, "PUT", urlRequest, "http-backend.hive365radio.com");
+		return;
+	}
+	else if(type == RequestInfo_Info)
+	{
+		SendSocketRequest(socket, "GET", "streamInfo/simple", "http-backend.hive365radio.com");
+		// SendHTTPRequest("GET")
+		return;
+	}
+	else
+	{
+		int client = GetClientFromSerial((view_as<DataPack>(pack)).ReadCell());
+		char szUsername[MAX_NAME_LENGTH];
+		char urlRequest[128];
+
+		if(client == 0 || !IsClientInGame(client) || !GetClientName(client, szUsername, sizeof(szUsername)))
+		{
+			return;
+		}
+		
+		if(type == RequestInfo_DjFtw)
+		{
+			urlRequest = "rating/streamer";
+			SendHTTPRequest(urlRequest, szUsername, szHostname);
+		}
+		else if(type == RequestInfo_SongRequest)
+		{
+			urlRequest = "songrequest";
+			Format(urlRequest, sizeof(urlRequest), "plugin/request.php?n=%s&s=%s&host=%s", szUsername, szEncodedData, szHostname);
+		}
+		else if(type == RequestInfo_Shoutout)
+		{
+			urlRequest = "shoutout";
+			Format(urlRequest, sizeof(urlRequest), "plugin/shoutout.php?n=%s&s=%s&host=%s", szUsername, szEncodedData, szHostname);
+		}
+		else if(type == RequestInfo_Choon || type == RequestInfo_Poon)
+			{
+			char rateType[8];
+			urlRequest = "rating/song";
+			if(type == RequestInfo_Choon)
+			{
+				rateType = "CHOON";
+			}
+			else
+			{
+				rateType = "POON";
+			}
+			SendHTTPRequest(urlRequest, szUsername, szHostname, rateType);
+			}
+		return;
+	}
+}
+
+//Socket Handlers
+#pragma newdecls optional
+
+/*
+public OnSocketConnected(Handle socket, any pack) 
+{
+	char urlRequest[1024];
+	(view_as<DataPack>(pack)).Reset();
+	
+	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
 	
 	if(type == SocketInfo_HeartBeat)
 	{
@@ -776,132 +871,62 @@ void OnTodoReceived(HTTPResponse response, any value)
 			}
 		return;
 	}
+
 }
 
-//Socket Handlers
-#pragma newdecls optional
+public OnSocketReceive(Handle socket, char [] receivedData, const int dataSize, any pack) 
+{
+	(view_as<DataPack>(pack)).Reset();
+	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
+	
+	if(type == SocketInfo_Info)
+	{
+		ParseSocketInfo(receivedData);
+	}
+}
 
-// public OnSocketConnected(Handle socket, any pack) 
-// {
-// 	char urlRequest[1024];
-// 	(view_as<DataPack>(pack)).Reset();
+public OnSocketDisconnected(Handle socket, any pack) 
+{
+	(view_as<DataPack>(pack)).Reset();
+	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
 	
-// 	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
-	
-// 	if(type == SocketInfo_HeartBeat)
-// 	{
-// 		char buffer[64];
+	if(type == SocketInfo_Request || type == SocketInfo_Shoutout || type == SocketInfo_DjFtw)
+	{
+		int client = GetClientFromSerial((view_as<DataPack>(pack)).ReadCell());
 		
-// 		EncodeBase64(buffer, sizeof(buffer), PLUGIN_VERSION);
-		
-// 		Format(urlRequest, sizeof(urlRequest), "addServer.php?port=%s&version=%s", szEncodedHostPort, buffer);
-		
-// 		SendSocketRequest(socket, "PUT", urlRequest, "http-backend.hive365radio.com");
-// 		return;
-// 	}
-// 	else if(type == SocketInfo_Info)
-// 	{
-// 		SendSocketRequest(socket, "GET", "streamInfo/simple", "http-backend.hive365radio.com");
-// 		return;
-// 	}
-// 	else
-// 	{
-// 		int client = GetClientFromSerial((view_as<DataPack>(pack)).ReadCell());
-// 		char szUsername[MAX_NAME_LENGTH];
-// 		char urlRequest[128];
-
-// 		if(client == 0 || !IsClientInGame(client) || !GetClientName(client, szUsername, sizeof(szUsername)))
-// 		{
-// 			return;
-// 		}
-		
-// 		if(type == SocketInfo_DjFtw)
-// 		{
-// 			urlRequest = "rating/streamer";
-// 			SendHTTPRequest(urlRequest, szUsername, szHostname);
-// 		}
-// 		else if(type == SocketInfo_Request)
-// 		{
-// 			urlRequest = "songrequest";
-// 			Format(urlRequest, sizeof(urlRequest), "plugin/request.php?n=%s&s=%s&host=%s", szUsername, szEncodedData, szHostname);
-// 		}
-// 		else if(type == SocketInfo_Shoutout)
-// 		{
-// 			urlRequest = "shoutout";
-// 			Format(urlRequest, sizeof(urlRequest), "plugin/shoutout.php?n=%s&s=%s&host=%s", szUsername, szEncodedData, szHostname);
-// 		}
-// 		else if(type == SocketInfo_Choon || type == SocketInfo_Poon)
-// 			{
-// 			char rateType[8];
-// 			urlRequest = "rating/song";
-// 			if(type == SocketInfo_Choon)
-// 			{
-// 				rateType = "CHOON";
-// 			}
-// 			else
-// 			{
-// 				rateType = "POON";
-// 			}
-// 			SendHTTPRequest(urlRequest, szUsername, szHostname, rateType);
-// 			}
-// 		return;
-// 	}
-
-// }
-
-// public OnSocketReceive(Handle socket, char [] receivedData, const int dataSize, any pack) 
-// {
-// 	(view_as<DataPack>(pack)).Reset();
-// 	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
+		if(client != 0 && IsClientInGame(client))
+		{
+			if(type == SocketInfo_DjFtw)
+			{
+				PrintToChatAll("\x01[\x04Hive365\x01] \x04%N thinks %s is a banging DJ!", client, szCurrentDJ);
+			}
+			else if(type == SocketInfo_Shoutout)
+			{
+				PrintToChat(client, "\x01[\x04Hive365\x01] \x04Your Shoutout has been sent!");
+			}
+			else
+			{
+				PrintToChat(client, "\x01[\x04Hive365\x01] \x04Your Request has been sent!");
+			}
+		}
+	}
 	
-// 	if(type == SocketInfo_Info)
-// 	{
-// 		ParseSocketInfo(receivedData);
-// 	}
-// }
+	delete view_as<DataPack>(pack);
+	delete socket;
+}
 
-// public OnSocketDisconnected(Handle socket, any pack) 
-// {
-// 	(view_as<DataPack>(pack)).Reset();
-// 	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
+public OnSocketError(Handle socket, const int errorType, const int errorNum, any pack) 
+{
+	(view_as<DataPack>(pack)).Reset();
+	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
 	
-// 	if(type == SocketInfo_Request || type == SocketInfo_Shoutout || type == SocketInfo_DjFtw)
-// 	{
-// 		int client = GetClientFromSerial((view_as<DataPack>(pack)).ReadCell());
-		
-// 		if(client != 0 && IsClientInGame(client))
-// 		{
-// 			if(type == SocketInfo_DjFtw)
-// 			{
-// 				PrintToChatAll("\x01[\x04Hive365\x01] \x04%N thinks %s is a banging DJ!", client, szCurrentDJ);
-// 			}
-// 			else if(type == SocketInfo_Shoutout)
-// 			{
-// 				PrintToChat(client, "\x01[\x04Hive365\x01] \x04Your Shoutout has been sent!");
-// 			}
-// 			else
-// 			{
-// 				PrintToChat(client, "\x01[\x04Hive365\x01] \x04Your Request has been sent!");
-// 			}
-// 		}
-// 	}
+	if(type == SocketInfo_Info)
+	{
+		strcopy(szCurrentSong, sizeof(szCurrentSong), "Unknown");
+		strcopy(szCurrentDJ, sizeof(szCurrentDJ), "AutoDj");
+	}
+	LogError("[Hive365] socket error %d (errno %d)", errorType, errorNum);
 	
-// 	delete view_as<DataPack>(pack);
-// 	delete socket;
-// }
-
-// public OnSocketError(Handle socket, const int errorType, const int errorNum, any pack) 
-// {
-// 	(view_as<DataPack>(pack)).Reset();
-// 	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
-	
-// 	if(type == SocketInfo_Info)
-// 	{
-// 		strcopy(szCurrentSong, sizeof(szCurrentSong), "Unknown");
-// 		strcopy(szCurrentDJ, sizeof(szCurrentDJ), "AutoDj");
-// 	}
-// 	LogError("[Hive365] socket error %d (errno %d)", errorType, errorNum);
-	
-// 	delete view_as<DataPack>(pack);
-// 	delete socket;
-// }
+	delete view_as<DataPack>(pack);
+	delete socket;
+}*/
