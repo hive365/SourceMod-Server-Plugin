@@ -764,7 +764,8 @@ public OnSocketConnected(Handle socket, any pack)
 
 }
 
-public void SendHTTPRequest()
+public void SendHTTPRequest(urlRequest, message, name, source)
+// Matching properties to be closer to what the API expects to assist in writing the function to be more coherent when looking back at it.
 {
 	
 }
