@@ -202,11 +202,6 @@ public void OnClientPutInServer(int client)
 	CreateTimer(HELP_TIMER_DELAY, HelpMessage, serial, TIMER_FLAG_NO_MAPCHANGE);
 }
 
-// public void HookHostnameChange(ConVar convar, const char[] oldValue, const char[] newValue)
-// {
-// 	EncodeBase64(szEncodedHostname, sizeof(szEncodedHostname), newValue);
-// }
-
 public void HookShowInfo(ConVar convar, const char[] oldValue, const char[] newValue)
 {
 	if(convar.IntValue < 1)
@@ -636,8 +631,6 @@ void ParseSocketInfo(char [] receivedData)
 	// //Get the actual json we need
 	int startOfJson = StrContains(receivedData, "{");
 
-
-	
 	if(startOfJson)
 	{
 		char JsonData[4096];
@@ -696,22 +689,29 @@ Sends out the full HTTP Request using GET, PUT, or POST.
 @param urlRequest The URL that will be requested
 @param name In the event that a PUT request is being made, this will be the name that goes into the json.
 */
-void SendHTTPRequest(char[] requestMethod, char[] urlRequest, char[] name = "", source = "", char[] message = "")
+public void SendHTTPRequest(char[] requestMethod, RequestInfo requestInfoType, char[] urlRequest, char[] name, char[] source, char[] message)
 {
 	HTTPRequest request = new HTTPRequest(urlRequest);
 	
 	switch(requestMethod) {
 		case "GET": 
 		{
-			request.Get(OnTodoReceived);
+			request.Get(OnHTTPResponseReceived);
 			return;
 		}
 		case "PUT":
 		{
+			// create a json object, input it as the first parameter, OnHTTPResponseReceived, then DELETE the json object (no garbage collection)
+
+
+
+			request.Put(OnHTTPResponseReceived);
 			return;
 		}
 		case "POST":
 		{
+			// create a json object, input it as the first parameter, OnHTTPResponseReceived, then DELETE the json object (no garbage collection)
+			// request.Post(); ---
 			return;
 		}
 	}
@@ -719,14 +719,79 @@ void SendHTTPRequest(char[] requestMethod, char[] urlRequest, char[] name = "", 
 	return;
 }
 
-// come back to this
-void MakeHTTPRequest(RequestInfo requestType)
+// parse received json info
+/* void ParseSongDetails()
 {
-	return;
+
+} */
+
+// come back to this
+public void MakeHTTPRequest(RequestInfo requestType, int client, char [] buffer)
+{
+	char urlRequest[256];
+
+	if(requestType == RequestInfo_HeartBeat)
+	{
+		Format(urlRequest, sizeof(urlRequest), "addServer.php?port=%s&version=%s", szHostPort, PLUGIN_VERSION);
+		
+		// SendSocketRequest(socket, "PUT", urlRequest, "http-backend.hive365radio.com");
+		SendHTTPRequest("PUT", requestType, urlRequest, "", "", "");
+		return;
+	}
+	else if(requestType == RequestInfo_Info)
+	{
+		// SendSocketRequest(socket, "GET", "streamInfo/simple", "http-backend.hive365radio.com");
+		SendHTTPRequest("GET", requestType, "http-backend.hive365radio.com/streamInfo/simple", "", "", "");
+		return;
+	}
+	else
+	{
+		char szUsername[MAX_NAME_LENGTH];
+		char urlRequest[128];
+
+		if(client == 0 || !IsClientInGame(client) || !GetClientName(client, szUsername, sizeof(szUsername)))
+		{
+			return;
+		}
+		
+		switch (requestType) 
+		{
+			case RequestInfo_DjFtw:
+			{
+				urlRequest = "rating/streamer";
+				SendHTTPRequest("POST", requestType, urlRequest, szUsername, szHostname, "");
+			}
+			case RequestInfo_SongRequest:
+			{
+				urlRequest = "songrequest";
+				// Format(urlRequest, sizeof(urlRequest), "plugin/request.php?n=%s&s=%s&host=%s", szUsername, buffer, szHostname);
+				SendHTTPRequest("PUT", requestType, urlRequest, szUsername, szHostname, buffer);
+			}
+			case RequestInfo_Shoutout:
+			{
+				urlRequest = "shoutout";
+				// Format(urlRequest, sizeof(urlRequest), "plugin/shoutout.php?n=%s&s=%s&host=%s", szUsername, buffer, szHostname);
+				SendHTTPRequest("PUT", requestType, urlRequest, szUsername, szHostname, buffer);
+			}
+			case RequestInfo_Choon:
+			{
+				char rateType[8] = "CHOON";
+				urlRequest = "rating/song";
+				SendHTTPRequest("POST", requestType, urlRequest, szUsername, szHostname, rateType);
+			}
+			case RequestInfo_Poon:
+			{
+				char rateType[8] = "POON";
+				urlRequest = "rating/song";
+				SendHTTPRequest("POST", requestType, urlRequest, szUsername, szHostname, rateType);
+			}
+		}
+		return;
+	}
 }
 
 // This will be the function run when SendHTTPRequest is called and the request is made.
-void OnTodoReceived(HTTPResponse response, any value)
+public void OnHTTPResponseReceived(HTTPResponse response, any value)
 {
     if (response.Status != HTTPStatus_OK) {
         // Failed to retrieve todo
@@ -738,68 +803,6 @@ void OnTodoReceived(HTTPResponse response, any value)
 
     char title[256];
     todo.GetString("title", title, sizeof(title));
-
-	RequestInfo type = view_as<RequestInfo>((view_as<DataPack>(pack)).ReadCell());
-	
-	if(type == RequestInfo_HeartBeat)
-	{
-		char buffer[64];
-		
-		EncodeBase64(buffer, sizeof(buffer), PLUGIN_VERSION);
-		
-		Format(urlRequest, sizeof(urlRequest), "addServer.php?port=%s&version=%s", szEncodedHostPort, buffer);
-		
-		SendSocketRequest(socket, "PUT", urlRequest, "http-backend.hive365radio.com");
-		return;
-	}
-	else if(type == RequestInfo_Info)
-	{
-		SendSocketRequest(socket, "GET", "streamInfo/simple", "http-backend.hive365radio.com");
-		// SendHTTPRequest("GET")
-		return;
-	}
-	else
-	{
-		int client = GetClientFromSerial((view_as<DataPack>(pack)).ReadCell());
-		char szUsername[MAX_NAME_LENGTH];
-		char urlRequest[128];
-
-		if(client == 0 || !IsClientInGame(client) || !GetClientName(client, szUsername, sizeof(szUsername)))
-		{
-			return;
-		}
-		
-		if(type == RequestInfo_DjFtw)
-		{
-			urlRequest = "rating/streamer";
-			SendHTTPRequest(urlRequest, szUsername, szHostname);
-		}
-		else if(type == RequestInfo_SongRequest)
-		{
-			urlRequest = "songrequest";
-			Format(urlRequest, sizeof(urlRequest), "plugin/request.php?n=%s&s=%s&host=%s", szUsername, szEncodedData, szHostname);
-		}
-		else if(type == RequestInfo_Shoutout)
-		{
-			urlRequest = "shoutout";
-			Format(urlRequest, sizeof(urlRequest), "plugin/shoutout.php?n=%s&s=%s&host=%s", szUsername, szEncodedData, szHostname);
-		}
-		else if(type == RequestInfo_Choon || type == RequestInfo_Poon)
-			{
-			char rateType[8];
-			urlRequest = "rating/song";
-			if(type == RequestInfo_Choon)
-			{
-				rateType = "CHOON";
-			}
-			else
-			{
-				rateType = "POON";
-			}
-			SendHTTPRequest(urlRequest, szUsername, szHostname, rateType);
-			}
-		return;
-	}
 }
 
 //Socket Handlers
