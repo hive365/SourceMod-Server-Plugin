@@ -139,15 +139,13 @@ public void OnPluginStart()
 
 	if(hostname)
 	{
-		char szHostname[128];
 		hostname.GetString(szHostname, sizeof(szHostname));
-		// hostname.AddChangeHook(HookHostnameChange);
 	}
 	
 	char szPort[10];
 	FindConVar("hostport").GetString(szPort, sizeof(szPort));
 	
-	ConVar showInfo = FindConVar("host_info_show");//CS:GO Only... for now
+	ConVar showInfo = FindConVar("host_info_show"); //CS:GO Only... for now
 	if(showInfo)
 	{
 		if(showInfo.IntValue < 1)
@@ -157,7 +155,7 @@ public void OnPluginStart()
 		showInfo.AddChangeHook(HookShowInfo);
 	}
 	
-	MakeSocketRequest(SocketInfo_Info);
+	MakeHTTPRequest(RequestInfo_Info, 0, "");
 	
 	CreateTimer(HIVE_ADVERT_RATE, ShowAdvert, _, TIMER_REPEAT);
 	CreateTimer(INFO_REFRESH_RATE, GetStreamInfoTimer, _, TIMER_REPEAT);
@@ -187,7 +185,7 @@ public void OnMapStart()
 	stringmapRequest.Clear();
 	stringmapShoutout.Clear();
 	stringmapDJFTW.Clear();
-	MakeSocketRequest(SocketInfo_HeartBeat);
+	MakeHTTPRequest(RequestInfo_HeartBeat, 0, "");
 }
 
 public void OnClientDisconnect(int client)
@@ -213,7 +211,7 @@ public void HookShowInfo(ConVar convar, const char[] oldValue, const char[] newV
 //Timer Handlers
 public Action GetStreamInfoTimer(Handle timer)
 {
-	MakeSocketRequest(SocketInfo_Info);
+	MakeHTTPRequest(RequestInfo_Info, 0, "");
 	return Plugin_Continue;
 }
 
@@ -253,7 +251,7 @@ public Action Cmd_DjFtw(int client, int args)
 		return Plugin_Handled;
 	}
 	
-	MakeSocketRequest(SocketInfo_DjFtw, GetClientSerial(client));
+	MakeHTTPRequest(RequestInfo_DjFtw, client, "");
 	
 	return Plugin_Handled;
 }
@@ -282,7 +280,7 @@ public Action Cmd_Shoutout(int client, int args)
 	
 	if(strlen(buffer) > 3)
 	{
-		MakeSocketRequest(SocketInfo_Shoutout, GetClientSerial(client), buffer);
+		MakeHTTPRequest(RequestInfo_Shoutout, client, buffer);
 	}
 	
 	return Plugin_Handled;
@@ -303,7 +301,7 @@ public Action Cmd_Choon(int client, int args)
 	
 	PrintToChatAll("\x01[\x04Hive365\x01] \x04%N thinks that %s is a banging Choon!", client, szCurrentSong);
 	
-	MakeSocketRequest(SocketInfo_Choon, GetClientSerial(client));
+	MakeHTTPRequest(RequestInfo_Choon, client, "");
 	
 	return Plugin_Handled;
 }
@@ -323,7 +321,7 @@ public Action Cmd_Poon(int client, int args)
 	
 	PrintToChatAll("\x01[\x04Hive365\x01] \x04%N thinks that %s  is a bit of a naff Poon!", client, szCurrentSong);
 	
-	MakeSocketRequest(SocketInfo_Poon, GetClientSerial(client));
+	MakeHTTPRequest(RequestInfo_Poon, client, "");
 	
 	return Plugin_Handled;
 }
@@ -352,7 +350,7 @@ public Action Cmd_Request(int client, int args)
 	
 	if(strlen(buffer) > 3)
 	{
-		MakeSocketRequest(SocketInfo_Request, GetClientSerial(client), buffer);
+		MakeHTTPRequest(RequestInfo_SongRequest, client, buffer);
 	}
 	
 	return Plugin_Handled;
@@ -628,7 +626,7 @@ void ParseSocketInfo(char [] receivedData)
 	char artist_song[256] = "Unknown";
 	char dj[64] = "AutoDj";
 	
-	// //Get the actual json we need
+	// Get the actual json we need
 	int startOfJson = StrContains(receivedData, "{");
 
 	if(startOfJson)
@@ -667,6 +665,7 @@ void ParseSocketInfo(char [] receivedData)
 	}
 }*/
 
+// In the event that some nasty characters are attemting to be passed into a string, this decodes them.
 void DecodeHTMLEntities(char [] str, int size)
 {
 	static char htmlEnts[][][] = 
@@ -684,55 +683,131 @@ void DecodeHTMLEntities(char [] str, int size)
 }
 
 /*
-Sends out the full HTTP Request using GET, PUT, or POST.
-@param requestMethod Either "GET", "PUT", or "POST" to tell the function which request to send
-@param urlRequest The URL that will be requested
-@param name In the event that a PUT request is being made, this will be the name that goes into the json.
+This sends out the full HTTP Request using GET, PUT, or POST.
+@param requestMethod Either "GET", "PUT", or "POST" to tell the function which request to send.
+@param requestInfoType The RequestInfo type that will be used in order to determine names of JSON keys, like RequestInfo_Choon.
+@param urlRequest The URL that will be requested.
+@param name This will be the "name" that goes into the json.
+@param source This will be the "source" that goes into the json.
+@param message Most requests differ when it comes to this, so this will be that third miscellaneous key that will be translated based on the requestMethod.
 */
-public void SendHTTPRequest(char[] requestMethod, RequestInfo requestInfoType, char[] urlRequest, char[] name, char[] source, char[] message)
+void SendHTTPRequest(char [] requestMethod, RequestInfo requestInfoType, char [] urlRequest, char [] name, char [] source, char [] message)
 {
-	HTTPRequest request = new HTTPRequest(urlRequest);
-	
-	switch(requestMethod) {
-		case "GET": 
-		{
-			request.Get(OnHTTPResponseReceived);
-			return;
-		}
-		case "PUT":
-		{
-			// create a json object, input it as the first parameter, OnHTTPResponseReceived, then DELETE the json object (no garbage collection)
+    HTTPRequest request = new HTTPRequest(urlRequest);
+           
+    if (StrEqual(requestMethod, "GET")) 
+    {
+        request.Get(OnHTTPResponseReceived, requestInfoType);
+        return;
+    }
+    else
+    {   
+        // Only create the JSON to be inputted if requestMethod is not "GET"
+        JSONObject inputtedJSON = new JSONObject();
+        
+        if (StrEqual(requestMethod, "PUT"))
+        {
+            if (requestInfoType == RequestInfo_HeartBeat)
+            {
+                inputtedJSON.SetString("serverName", szHostname);
+                inputtedJSON.SetString("gameType", ""); // No current way to grab this
+                inputtedJSON.SetString("pluginVersion", PLUGIN_VERSION);
+                inputtedJSON.SetString("directConnect", ""); // come back to this
+                inputtedJSON.SetInt("currentPlayers", GetClientCount());
+                inputtedJSON.SetInt("maxPlayers", MaxClients);
+            }
+            else if (requestInfoType == RequestInfo_SongRequest)
+            {
+                inputtedJSON.SetString("name", name);
+                inputtedJSON.SetString("source", source);
+                inputtedJSON.SetString("songName", message);
+            }
+            else if (requestInfoType == RequestInfo_Shoutout)
+            {
+                inputtedJSON.SetString("name", name);
+                inputtedJSON.SetString("source", source);
+                inputtedJSON.SetString("message", message);
+            }
 
+            request.Put(inputtedJSON, OnHTTPResponseReceived, requestInfoType);
+        }
+        else if (StrEqual(requestMethod, "POST"))
+        {
+            if (requestInfoType == RequestInfo_DjFtw)
+            {
+                inputtedJSON.SetString("name", name);
+                inputtedJSON.SetString("source", source);
+            }
+            else if (requestInfoType == RequestInfo_Choon || requestInfoType == RequestInfo_Poon)
+            {
+                inputtedJSON.SetString("type", message);
+                inputtedJSON.SetString("name", name);
+                inputtedJSON.SetString("source", source);
+            }
 
-
-			request.Put(OnHTTPResponseReceived);
-			return;
-		}
-		case "POST":
-		{
-			// create a json object, input it as the first parameter, OnHTTPResponseReceived, then DELETE the json object (no garbage collection)
-			// request.Post(); ---
-			return;
-		}
-	}
-
-	return;
+            request.Post(inputtedJSON, OnHTTPResponseReceived, requestInfoType);
+        }
+        delete inputtedJSON;
+        return;
+    }
 }
 
-// parse received json info
-/* void ParseSongDetails()
+// This parses the data received and places it into the corresponding globals, updating them and telling all users if necessary.
+void ParseSongDetails(JSONObject responseData)
 {
+    /* Because of the way the JSON info is stored, convert the "info" key into a string, 
+    then convert that string into its own JSON object to call. */
+    char info[256];
+    responseData.GetString("info", info, sizeof(info));
+    JSONObject infoData = JSONObject.FromString(info);
+        
+    char artist[128];
+    char songName[128];
+    char artist_song[256];
+    char streamer[64];
 
-} */
+    // Pull song and its artist from the JSON.
+    infoData.GetString("artist", artist, sizeof(artist));
+    DecodeHTMLEntities(artist, sizeof(artist));
+    infoData.GetString("title", songName, sizeof(songName));
+    DecodeHTMLEntities(songName, sizeof(songName));
+    Format(artist_song, sizeof(artist_song), "%s - %s", songName, artist);
 
-// come back to this
-public void MakeHTTPRequest(RequestInfo requestType, int client, char [] buffer)
+    // If szCurrentSong doesn't match the one that was just grabbed, update it and tell everyone that a new song is playing. 
+    if(!StrEqual(artist_song, szCurrentSong, false))
+    {
+        strcopy(szCurrentSong, sizeof(szCurrentSong), artist_song);
+        PrintToChatAll("\x01[\x04Hive365\x01] \x04Now Playing: %s", szCurrentSong);
+    }
+
+    // Pull DJ from the JSON.
+    infoData.GetString("streamer", streamer, sizeof(streamer));
+    DecodeHTMLEntities(streamer, sizeof(streamer));
+    
+    // If szCurrentDJ doesn't match the one that was just grabbed, update it and tell everyone who the recently grabbed DJ is.
+    if(!StrEqual(streamer, szCurrentDJ, false))
+    {
+        strcopy(szCurrentDJ, sizeof(szCurrentDJ), streamer);
+        stringmapDJFTW.Clear();
+        PrintToChatAll("\x01[\x04Hive365\x01] \x04Your DJ is: %s", szCurrentDJ);
+    }
+
+    delete infoData;
+}
+
+/* 
+This is called by many Actions such as Cmd_Request() in order to send the right requests to the server according to what needs to be sent.
+@param requestType Tell the program which kind of request needs to be made.
+@param client The client index, to be used when necessary. Only matters when not dealing with Heartbeat or Info.
+@param buffer Many commands will have a "buffer" that will hold info passed into the command. !request <song> would have <song> stored as the buffer, and it should be passed here. 
+*/
+void MakeHTTPRequest(RequestInfo requestType, int client, char [] buffer)
 {
 	char urlRequest[256];
 
 	if(requestType == RequestInfo_HeartBeat)
 	{
-		Format(urlRequest, sizeof(urlRequest), "addServer.php?port=%s&version=%s", szHostPort, PLUGIN_VERSION);
+		Format(urlRequest, sizeof(urlRequest), "http-backend.hive365radio.com/addServer.php?port=%s&version=%s", szHostPort, PLUGIN_VERSION);
 		
 		// SendSocketRequest(socket, "PUT", urlRequest, "http-backend.hive365radio.com");
 		SendHTTPRequest("PUT", requestType, urlRequest, "", "", "");
@@ -747,7 +822,6 @@ public void MakeHTTPRequest(RequestInfo requestType, int client, char [] buffer)
 	else
 	{
 		char szUsername[MAX_NAME_LENGTH];
-		char urlRequest[128];
 
 		if(client == 0 || !IsClientInGame(client) || !GetClientName(client, szUsername, sizeof(szUsername)))
 		{
@@ -790,19 +864,22 @@ public void MakeHTTPRequest(RequestInfo requestType, int client, char [] buffer)
 	}
 }
 
-// This will be the function run when SendHTTPRequest is called and the request is made.
-public void OnHTTPResponseReceived(HTTPResponse response, any value)
+// This is the function run when SendHTTPRequest() is called and the request is made.
+void OnHTTPResponseReceived(HTTPResponse response, RequestInfo requestType)
 {
     if (response.Status != HTTPStatus_OK) {
-        // Failed to retrieve todo
+        // Failed to retrieve data.
         return;
     }
 
-    // Indicate that the response contains a JSON object
-    JSONObject todo = view_as<JSONObject>(response.Data);
-
-    char title[256];
-    todo.GetString("title", title, sizeof(title));
+    if (requestType == RequestInfo_Info)
+    {
+        // Only create a JSON object to parse if GET was used to grab current stream info
+        JSONObject responseData = view_as<JSONObject>(response.Data);
+        ParseSongDetails(responseData);
+        delete responseData;
+    }
+    return;
 }
 
 //Socket Handlers
