@@ -30,6 +30,7 @@ Menu menuTuned;
 //Tracked Information
 char szHostname[256];
 char szHostPort[16];
+char szHostIP[32];
 char szCurrentSong[256];
 char szCurrentDJ[64];
 bool bIsTunedIn[MAXPLAYERS+1];
@@ -707,13 +708,17 @@ void SendHTTPRequest(char [] requestMethod, RequestInfo requestInfoType, char []
         
         if (StrEqual(requestMethod, "PUT"))
         {
-            PrintToServer("PUT!"); // to be deleted when testing is finished
             if (requestInfoType == RequestInfo_HeartBeat)
             {
+				char directConnect[64];
+				IntToString(GetConVarInt(FindConVar("hostip")), szHostIP, sizeof(szHostIP));
+				IntToString(GetConVarInt(FindConVar("hostport")), szHostPort, sizeof(szHostPort));
+				Format(directConnect, sizeof(directConnect), "%s:%s", szHostIP, szHostname);
+
                 inputtedJSON.SetString("serverName", szHostname);
-                inputtedJSON.SetString("gameType", "bowling"); // No current way to grab this
+                inputtedJSON.SetString("gameType", ""); // No current way to grab this
                 inputtedJSON.SetString("pluginVersion", PLUGIN_VERSION);
-                inputtedJSON.SetString("directConnect", "close"); // come back to this
+                inputtedJSON.SetString("directConnect", directConnect);
                 inputtedJSON.SetInt("currentPlayers", GetClientCount());
                 inputtedJSON.SetInt("maxPlayers", MaxClients);
             }
@@ -730,7 +735,7 @@ void SendHTTPRequest(char [] requestMethod, RequestInfo requestInfoType, char []
                 inputtedJSON.SetString("message", message);
             }
 
-            request.Put(inputtedJSON, OnHTTPResponseReceived, requestInfoType);
+            request.Put(view_as<JSON>(inputtedJSON), OnHTTPResponseReceived, requestInfoType);
         }
         else if (StrEqual(requestMethod, "POST"))
         {
@@ -757,7 +762,7 @@ void SendHTTPRequest(char [] requestMethod, RequestInfo requestInfoType, char []
 void ParseSongDetails(JSONObject responseData)
 {
     JSONObject info = new JSONObject();
-    info = responseData.Get("info");
+    info = view_as<JSONObject>(responseData.Get("info"));
 
     char artist[128];
     char songName[128];
@@ -805,15 +810,11 @@ void MakeHTTPRequest(RequestInfo requestType, int client, char [] buffer)
 
 	if(requestType == RequestInfo_HeartBeat)
 	{
-		Format(urlRequest, sizeof(urlRequest), "http-backend.hive365radio.com/addServer.php?port=%s&version=%s", szHostPort, PLUGIN_VERSION);
-		
-		// SendSocketRequest(socket, "PUT", urlRequest, "http-backend.hive365radio.com");
-		SendHTTPRequest("PUT", requestType, urlRequest, "", "", "");
+		SendHTTPRequest("PUT", requestType, "http-backend.hive365radio.com/gameserver", "", "", "");
 		return;
 	}
 	else if(requestType == RequestInfo_Info)
 	{
-		// SendSocketRequest(socket, "GET", "streamInfo/simple", "http-backend.hive365radio.com");
 		SendHTTPRequest("GET", requestType, "http-backend.hive365radio.com/streamInfo/simple", "", "", "");
 		return;
 	}
@@ -830,32 +831,23 @@ void MakeHTTPRequest(RequestInfo requestType, int client, char [] buffer)
 		{
 			case RequestInfo_DjFtw:
 			{
-				urlRequest = "rating/streamer";
-				SendHTTPRequest("POST", requestType, urlRequest, szUsername, szHostname, "");
+				SendHTTPRequest("POST", requestType, "http-backend.hive365radio.com/rating/streamer", szUsername, szHostname, "");
 			}
 			case RequestInfo_SongRequest:
 			{
-				urlRequest = "songrequest";
-				// Format(urlRequest, sizeof(urlRequest), "plugin/request.php?n=%s&s=%s&host=%s", szUsername, buffer, szHostname);
-				SendHTTPRequest("PUT", requestType, urlRequest, szUsername, szHostname, buffer);
+				SendHTTPRequest("PUT", requestType, "http-backend.hive365radio.com/songrequest", szUsername, szHostname, buffer);
 			}
 			case RequestInfo_Shoutout:
 			{
-				urlRequest = "shoutout";
-				// Format(urlRequest, sizeof(urlRequest), "plugin/shoutout.php?n=%s&s=%s&host=%s", szUsername, buffer, szHostname);
-				SendHTTPRequest("PUT", requestType, urlRequest, szUsername, szHostname, buffer);
+				SendHTTPRequest("PUT", requestType, "http-backend.hive365radio.com/shoutout", szUsername, szHostname, buffer);
 			}
 			case RequestInfo_Choon:
 			{
-				char rateType[8] = "CHOON";
-				urlRequest = "rating/song";
-				SendHTTPRequest("POST", requestType, urlRequest, szUsername, szHostname, rateType);
+				SendHTTPRequest("POST", requestType, "http-backend.hive365radio.com/rating/song", szUsername, szHostname, "CHOON");
 			}
 			case RequestInfo_Poon:
 			{
-				char rateType[8] = "POON";
-				urlRequest = "rating/song";
-				SendHTTPRequest("POST", requestType, urlRequest, szUsername, szHostname, rateType);
+				SendHTTPRequest("POST", requestType, "http-backend.hive365radio.com/rating/song", szUsername, szHostname, "POON");
 			}
 		}
 		return;
@@ -891,6 +883,7 @@ void OnHTTPResponseReceived(HTTPResponse response, RequestInfo requestType)
         } else {
             PrintToServer("GET Response bad");
         }
+		// --
         return;
     }
 
@@ -900,7 +893,7 @@ void OnHTTPResponseReceived(HTTPResponse response, RequestInfo requestType)
         JSONObject responseData = view_as<JSONObject>(response.Data);
         ParseSongDetails(responseData);
         delete responseData;
-        PrintToServer("GET Response good");
+        //PrintToServer("GET Response good");
         return;
     } else {
         PrintToServer("PUT Response good");
