@@ -707,12 +707,13 @@ void SendHTTPRequest(char [] requestMethod, RequestInfo requestInfoType, char []
         
         if (StrEqual(requestMethod, "PUT"))
         {
+            PrintToServer("PUT!"); // to be deleted when testing is finished
             if (requestInfoType == RequestInfo_HeartBeat)
             {
                 inputtedJSON.SetString("serverName", szHostname);
-                inputtedJSON.SetString("gameType", ""); // No current way to grab this
+                inputtedJSON.SetString("gameType", "bowling"); // No current way to grab this
                 inputtedJSON.SetString("pluginVersion", PLUGIN_VERSION);
-                inputtedJSON.SetString("directConnect", ""); // come back to this
+                inputtedJSON.SetString("directConnect", "close"); // come back to this
                 inputtedJSON.SetInt("currentPlayers", GetClientCount());
                 inputtedJSON.SetInt("maxPlayers", MaxClients);
             }
@@ -755,21 +756,18 @@ void SendHTTPRequest(char [] requestMethod, RequestInfo requestInfoType, char []
 // This parses the data received and places it into the corresponding globals, updating them and telling all users if necessary.
 void ParseSongDetails(JSONObject responseData)
 {
-    /* Because of the way the JSON info is stored, convert the "info" key into a string, 
-    then convert that string into its own JSON object to call. */
-    char info[256];
-    responseData.GetString("info", info, sizeof(info));
-    JSONObject infoData = JSONObject.FromString(info);
-        
+    JSONObject info = new JSONObject();
+    info = responseData.Get("info");
+
     char artist[128];
     char songName[128];
     char artist_song[256];
     char streamer[64];
 
     // Pull song and its artist from the JSON.
-    infoData.GetString("artist", artist, sizeof(artist));
+    info.GetString("artist", artist, sizeof(artist));
     DecodeHTMLEntities(artist, sizeof(artist));
-    infoData.GetString("title", songName, sizeof(songName));
+    info.GetString("title", songName, sizeof(songName));
     DecodeHTMLEntities(songName, sizeof(songName));
     Format(artist_song, sizeof(artist_song), "%s - %s", songName, artist);
 
@@ -781,7 +779,7 @@ void ParseSongDetails(JSONObject responseData)
     }
 
     // Pull DJ from the JSON.
-    infoData.GetString("streamer", streamer, sizeof(streamer));
+    info.GetString("streamer", streamer, sizeof(streamer));
     DecodeHTMLEntities(streamer, sizeof(streamer));
     
     // If szCurrentDJ doesn't match the one that was just grabbed, update it and tell everyone who the recently grabbed DJ is.
@@ -792,7 +790,7 @@ void ParseSongDetails(JSONObject responseData)
         PrintToChatAll("\x01[\x04Hive365\x01] \x04Your DJ is: %s", szCurrentDJ);
     }
 
-    delete infoData;
+    //delete infoData;
 }
 
 /* 
@@ -867,8 +865,32 @@ void MakeHTTPRequest(RequestInfo requestType, int client, char [] buffer)
 // This is the function run when SendHTTPRequest() is called and the request is made.
 void OnHTTPResponseReceived(HTTPResponse response, RequestInfo requestType)
 {
-    if (response.Status != HTTPStatus_OK) {
+    if (response.Status != HTTPStatus_OK && response.Status != HTTPStatus_Created) {
         // Failed to retrieve data.
+        // -- this will all be deleted when testing is complete
+        if (requestType == RequestInfo_HeartBeat)
+        {
+            if (response.Status == HTTPStatus_BadRequest)
+            {
+                PrintToServer("PUT Error: Bad Request");
+            } else if (response.Status == HTTPStatus_TooManyRequests)
+            {
+                PrintToServer("PUT Error: Too Many Requests");
+            } else if (response.Status == HTTPStatus_Forbidden)
+            {
+                PrintToServer("PUT Error: Forbidden");
+            } else if (response.Status == HTTPStatus_Unauthorized)
+            {
+                PrintToServer("PUT Error: Unauthorized");
+            } else if (response.Status == HTTPStatus_InternalServerError)
+            {
+                PrintToServer("PUT Error: Internal Server Error");
+            } else {
+                PrintToServer("PUT Error: %s", response.Status);
+            }
+        } else {
+            PrintToServer("GET Response bad");
+        }
         return;
     }
 
@@ -878,8 +900,11 @@ void OnHTTPResponseReceived(HTTPResponse response, RequestInfo requestType)
         JSONObject responseData = view_as<JSONObject>(response.Data);
         ParseSongDetails(responseData);
         delete responseData;
+        PrintToServer("GET Response good");
+        return;
+    } else {
+        PrintToServer("PUT Response good");
     }
-    return;
 }
 
 //Socket Handlers
