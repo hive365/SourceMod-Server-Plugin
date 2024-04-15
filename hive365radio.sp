@@ -622,10 +622,10 @@ void SendHTTPRequest(char [] requestMethod, RequestInfo requestInfoType, char []
         {
             if (requestInfoType == RequestInfo_HeartBeat)
             {
-				char directConnect[64];
-				IntToString(GetConVarInt(FindConVar("hostip")), szHostIP, sizeof(szHostIP));
-				IntToString(GetConVarInt(FindConVar("hostport")), szHostPort, sizeof(szHostPort));
-				Format(directConnect, sizeof(directConnect), "%s:%s", szHostIP, szHostname);
+                char directConnect[64];
+                IntToString(GetConVarInt(FindConVar("hostip")), szHostIP, sizeof(szHostIP));
+                IntToString(GetConVarInt(FindConVar("hostport")), szHostPort, sizeof(szHostPort));
+                Format(directConnect, sizeof(directConnect), "%s:%s", szHostIP, szHostname);
 
                 inputtedJSON.SetString("serverName", szHostname);
                 inputtedJSON.SetString("gameType", ""); // No current way to grab this
@@ -718,8 +718,6 @@ This is called by many Actions such as Cmd_Request() in order to send the right 
 */
 void MakeHTTPRequest(RequestInfo requestType, int client, char [] buffer)
 {
-	char urlRequest[256];
-
 	if(requestType == RequestInfo_HeartBeat)
 	{
 		SendHTTPRequest("PUT", requestType, "http-backend.hive365radio.com/gameserver", "", "", "");
