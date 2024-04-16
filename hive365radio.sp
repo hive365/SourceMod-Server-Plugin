@@ -625,10 +625,10 @@ void SendHTTPRequest(char [] requestMethod, RequestInfo requestInfoType, char []
                 char directConnect[64];
                 IntToString(GetConVarInt(FindConVar("hostip")), szHostIP, sizeof(szHostIP));
                 IntToString(GetConVarInt(FindConVar("hostport")), szHostPort, sizeof(szHostPort));
-                Format(directConnect, sizeof(directConnect), "%s:%s", szHostIP, szHostname);
+                Format(directConnect, sizeof(directConnect), "%s:%s", szHostIP, szHostPort);
 
                 inputtedJSON.SetString("serverName", szHostname);
-                inputtedJSON.SetString("gameType", ""); // No current way to grab this
+                inputtedJSON.SetString("gameType", "sourcemod"); // No current way to grab this
                 inputtedJSON.SetString("pluginVersion", PLUGIN_VERSION);
                 inputtedJSON.SetString("directConnect", directConnect);
                 inputtedJSON.SetInt("currentPlayers", GetClientCount());
