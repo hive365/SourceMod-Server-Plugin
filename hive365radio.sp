@@ -61,6 +61,7 @@ enum RequestInfo
 	RequestInfo_Poon,
 	RequestInfo_DjFtw,
 	RequestInfo_HeartBeat,
+	RequestInfo_PublicIP,
 };
 
 public Plugin myinfo = 
@@ -143,9 +144,6 @@ public void OnPluginStart()
 		hostname.GetString(szHostname, sizeof(szHostname));
 	}
 	
-	char szPort[10];
-	FindConVar("hostport").GetString(szPort, sizeof(szPort));
-	
 	ConVar showInfo = FindConVar("host_info_show"); //CS:GO Only... for now
 	if(showInfo)
 	{
@@ -157,6 +155,8 @@ public void OnPluginStart()
 	}
 	
 	MakeHTTPRequest(RequestInfo_Info, 0, "");
+    MakeHTTPRequest(RequestInfo_PublicIP, 0, "");
+    PrintToServer("OnPluginStart() tried to grab IP. Result: %s", szHostIP); // test line, can be deleted
 	
 	CreateTimer(HIVE_ADVERT_RATE, ShowAdvert, _, TIMER_REPEAT);
 	CreateTimer(INFO_REFRESH_RATE, GetStreamInfoTimer, _, TIMER_REPEAT);
@@ -623,8 +623,9 @@ void SendHTTPRequest(char [] requestMethod, RequestInfo requestInfoType, char []
             if (requestInfoType == RequestInfo_HeartBeat)
             {
                 char directConnect[64];
-                IntToString(GetConVarInt(FindConVar("hostip")), szHostIP, sizeof(szHostIP));
                 IntToString(GetConVarInt(FindConVar("hostport")), szHostPort, sizeof(szHostPort));
+                SendHTTPRequest("GET", RequestInfo_PublicIP, "http://api64.ipify.org/?format=json", "", "", "");
+                PrintToServer("Heartbeat requested. Attempting to grab IP. Result: %s", szHostIP); // test line, can be deleted.
                 Format(directConnect, sizeof(directConnect), "%s:%s", szHostIP, szHostPort);
 
                 inputtedJSON.SetString("serverName", szHostname);
@@ -728,6 +729,11 @@ void MakeHTTPRequest(RequestInfo requestType, int client, char [] buffer)
 		SendHTTPRequest("GET", requestType, "http-backend.hive365radio.com/streamInfo/simple", "", "", "");
 		return;
 	}
+    else if (requestType == RequestInfo_PublicIP)
+    {
+        SendHTTPRequest("GET", requestType, "http://api64.ipify.org/?format=json", "", "", "");
+        return;
+    }
 	else
 	{
 		char szUsername[MAX_NAME_LENGTH];
@@ -780,4 +786,11 @@ void OnHTTPResponseReceived(HTTPResponse response, RequestInfo requestType)
         delete responseData;
         return;
     }
+	else if (requestType == RequestInfo_PublicIP)
+	{
+        JSONObject responseData = view_as<JSONObject>(response.Data);
+        responseData.GetString("ip", szHostIP, sizeof(szHostIP));
+        delete responseData;
+        return;
+	}
 }
