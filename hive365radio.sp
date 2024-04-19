@@ -138,7 +138,7 @@ public void OnPluginStart()
 	menuHelp.Pagination = MENU_NO_PAGINATION;
 	menuHelp.ExitButton = true;
 	
-	ConVar gametype = FindConVar("hostname");
+	ConVar gametype = FindConVar("hostname"); // grab game type BEFORE hostname is set because it's stored there for some reason
 
 	if(gametype)
 	{
@@ -168,6 +168,15 @@ public void OnPluginStart()
 	if (LibraryExists("updater"))
 	{
 		Updater_AddPlugin(UPDATE_URL);
+	}
+}
+
+public void OnConfigsExecuted()
+{
+	ConVar hostname = FindConVar("hostname");
+	if(hostname)
+	{
+		hostname.GetString(szHostName, sizeof(szHostName)); // Grab server name AFTER it's set
 	}
 }
 
@@ -639,7 +648,7 @@ void SendHTTPRequest(char [] requestMethod, RequestInfo requestInfoType, char []
 				}
 				Format(directConnect, sizeof(directConnect), "%s:%s", szHostIP, szHostPort);
 
-				inputtedJSON.SetString("serverName", "Test part 2 to differentiate this one from the other one");
+				inputtedJSON.SetString("serverName", szHostName);
 				inputtedJSON.SetString("gameType", szGameType);
 				inputtedJSON.SetString("pluginVersion", PLUGIN_VERSION);
 				inputtedJSON.SetString("directConnect", directConnect);
