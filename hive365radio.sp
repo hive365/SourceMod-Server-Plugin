@@ -28,8 +28,9 @@ Menu menuVolume;
 Menu menuTuned;
 
 //Tracked Information
-char szHostname[256];
+char szGameType[256];
 char szHostPort[16];
+char szHostName[256];
 char szHostIP[32];
 char szCurrentSong[256];
 char szCurrentDJ[64];
@@ -137,11 +138,11 @@ public void OnPluginStart()
 	menuHelp.Pagination = MENU_NO_PAGINATION;
 	menuHelp.ExitButton = true;
 	
-	ConVar hostname = FindConVar("hostname");
+	ConVar gametype = FindConVar("hostname");
 
-	if(hostname)
+	if(gametype)
 	{
-		hostname.GetString(szHostname, sizeof(szHostname));
+		gametype.GetString(szGameType, sizeof(szGameType));
 	}
 	
 	ConVar showInfo = FindConVar("host_info_show"); //CS:GO Only... for now
@@ -153,11 +154,9 @@ public void OnPluginStart()
 		}
 		showInfo.AddChangeHook(HookShowInfo);
 	}
-	
+		   
 	MakeHTTPRequest(RequestInfo_Info, 0, "");
-    MakeHTTPRequest(RequestInfo_PublicIP, 0, "");
-    PrintToServer("OnPluginStart() tried to grab IP. Result: %s", szHostIP); // test line, can be deleted
-	
+		   
 	CreateTimer(HIVE_ADVERT_RATE, ShowAdvert, _, TIMER_REPEAT);
 	CreateTimer(INFO_REFRESH_RATE, GetStreamInfoTimer, _, TIMER_REPEAT);
 	
@@ -174,10 +173,10 @@ public void OnPluginStart()
 
 public void OnLibraryAdded(const char[] name)
 {
-    if (StrEqual(name, "updater"))
-    {
-        Updater_AddPlugin(UPDATE_URL);
-    }
+	if (StrEqual(name, "updater"))
+	{
+		Updater_AddPlugin(UPDATE_URL);
+	}
 }
 
 public void OnMapStart()
@@ -213,6 +212,7 @@ public void HookShowInfo(ConVar convar, const char[] oldValue, const char[] newV
 public Action GetStreamInfoTimer(Handle timer)
 {
 	MakeHTTPRequest(RequestInfo_Info, 0, "");
+	MakeHTTPRequest(RequestInfo_HeartBeat, 0, "");
 	return Plugin_Continue;
 }
 
@@ -606,109 +606,130 @@ This sends out the full HTTP Request using GET, PUT, or POST.
 */
 void SendHTTPRequest(char [] requestMethod, RequestInfo requestInfoType, char [] urlRequest, char [] name, char [] source, char [] message)
 {
-    HTTPRequest request = new HTTPRequest(urlRequest);
-           
-    if (StrEqual(requestMethod, "GET")) 
-    {
-        request.Get(OnHTTPResponseReceived, requestInfoType);
-        return;
-    }
-    else
-    {   
-        // Only create the JSON to be inputted if requestMethod is not "GET"
-        JSONObject inputtedJSON = new JSONObject();
-        
-        if (StrEqual(requestMethod, "PUT"))
-        {
-            if (requestInfoType == RequestInfo_HeartBeat)
-            {
-                char directConnect[64];
-                IntToString(GetConVarInt(FindConVar("hostport")), szHostPort, sizeof(szHostPort));
-                SendHTTPRequest("GET", RequestInfo_PublicIP, "http://api64.ipify.org/?format=json", "", "", "");
-                PrintToServer("Heartbeat requested. Attempting to grab IP. Result: %s", szHostIP); // test line, can be deleted.
-                Format(directConnect, sizeof(directConnect), "%s:%s", szHostIP, szHostPort);
+	HTTPRequest request = new HTTPRequest(urlRequest);
+		   
+	if (StrEqual(requestMethod, "GET")) 
+	{
+		request.Get(OnHTTPResponseReceived, requestInfoType);
+		return;
+	}
+	else
+	{   
+		// Only create the JSON to be inputted if requestMethod is not "GET"
+		JSONObject inputtedJSON = new JSONObject();
+		
+		if (StrEqual(requestMethod, "PUT"))
+		{
+			bool ipGrabSuccess;
+			if (requestInfoType == RequestInfo_HeartBeat)
+			{
+				char directConnect[64];
 
-                inputtedJSON.SetString("serverName", szHostname);
-                inputtedJSON.SetString("gameType", "sourcemod"); // No current way to grab this
-                inputtedJSON.SetString("pluginVersion", PLUGIN_VERSION);
-                inputtedJSON.SetString("directConnect", directConnect);
-                inputtedJSON.SetInt("currentPlayers", GetClientCount());
-                inputtedJSON.SetInt("maxPlayers", MaxClients);
-            }
-            else if (requestInfoType == RequestInfo_SongRequest)
-            {
-                inputtedJSON.SetString("name", name);
-                inputtedJSON.SetString("source", source);
-                inputtedJSON.SetString("songName", message);
-            }
-            else if (requestInfoType == RequestInfo_Shoutout)
-            {
-                inputtedJSON.SetString("name", name);
-                inputtedJSON.SetString("source", source);
-                inputtedJSON.SetString("message", message);
-            }
+				IntToString(GetConVarInt(FindConVar("hostport")), szHostPort, sizeof(szHostPort));
 
-            request.Put(view_as<JSON>(inputtedJSON), OnHTTPResponseReceived, requestInfoType);
-        }
-        else if (StrEqual(requestMethod, "POST"))
-        {
-            if (requestInfoType == RequestInfo_DjFtw)
-            {
-                inputtedJSON.SetString("name", name);
-                inputtedJSON.SetString("source", source);
-            }
-            else if (requestInfoType == RequestInfo_Choon || requestInfoType == RequestInfo_Poon)
-            {
-                inputtedJSON.SetString("type", message);
-                inputtedJSON.SetString("name", name);
-                inputtedJSON.SetString("source", source);
-            }
+				SendHTTPRequest("GET", RequestInfo_PublicIP, "http://api64.ipify.org/?format=json", "", "", "");
+				// Ensure that the IP is grabbed successfully.
+				if (!StrEqual(szHostIP, "") && !StrEqual(szHostIP, " ")) 
+				{
+					ipGrabSuccess = true;
+				} 
+				else 
+				{
+					ipGrabSuccess = false;
+				}
+				Format(directConnect, sizeof(directConnect), "%s:%s", szHostIP, szHostPort);
 
-            request.Post(inputtedJSON, OnHTTPResponseReceived, requestInfoType);
-        }
-        delete inputtedJSON;
-        return;
-    }
+				inputtedJSON.SetString("serverName", "Test part 2 to differentiate this one from the other one");
+				inputtedJSON.SetString("gameType", szGameType);
+				inputtedJSON.SetString("pluginVersion", PLUGIN_VERSION);
+				inputtedJSON.SetString("directConnect", directConnect);
+				inputtedJSON.SetInt("currentPlayers", GetClientCount());
+				inputtedJSON.SetInt("maxPlayers", MaxClients);
+			}
+			else if (requestInfoType == RequestInfo_SongRequest)
+			{
+				inputtedJSON.SetString("name", name);
+				inputtedJSON.SetString("source", source);
+				inputtedJSON.SetString("songName", message);
+			}
+			else if (requestInfoType == RequestInfo_Shoutout)
+			{
+				inputtedJSON.SetString("name", name);
+				inputtedJSON.SetString("source", source);
+				inputtedJSON.SetString("message", message);
+			}
+
+			if (requestInfoType != RequestInfo_HeartBeat) 
+			{
+				request.Put(view_as<JSON>(inputtedJSON), OnHTTPResponseReceived, requestInfoType); // Request normally
+			}
+			else
+			{
+				if (ipGrabSuccess)
+				{
+					request.Put(view_as<JSON>(inputtedJSON), OnHTTPResponseReceived, requestInfoType); // Heartbeat request only if the IP was grabbed successfully
+				}
+			}
+		}
+		else if (StrEqual(requestMethod, "POST"))
+		{
+			if (requestInfoType == RequestInfo_DjFtw)
+			{
+				inputtedJSON.SetString("name", name);
+				inputtedJSON.SetString("source", source);
+			}
+			else if (requestInfoType == RequestInfo_Choon || requestInfoType == RequestInfo_Poon)
+			{
+				inputtedJSON.SetString("type", message);
+				inputtedJSON.SetString("name", name);
+				inputtedJSON.SetString("source", source);
+			}
+
+			request.Post(inputtedJSON, OnHTTPResponseReceived, requestInfoType);
+		}
+		delete inputtedJSON;
+		return;
+	}
 }
 
 // This parses the data received and places it into the corresponding globals, updating them and telling all users if necessary.
 void ParseSongDetails(JSONObject responseData)
 {
-    JSONObject info = new JSONObject();
-    info = view_as<JSONObject>(responseData.Get("info"));
+	JSONObject info = new JSONObject();
+	info = view_as<JSONObject>(responseData.Get("info"));
 
-    char artist[128];
-    char songName[128];
-    char artist_song[256];
-    char streamer[64];
+	char artist[128];
+	char songName[128];
+	char artist_song[256];
+	char streamer[64];
 
-    // Pull song and its artist from the JSON.
-    info.GetString("artist", artist, sizeof(artist));
-    DecodeHTMLEntities(artist, sizeof(artist));
-    info.GetString("title", songName, sizeof(songName));
-    DecodeHTMLEntities(songName, sizeof(songName));
-    Format(artist_song, sizeof(artist_song), "%s - %s", songName, artist);
+	// Pull song and its artist from the JSON.
+	info.GetString("artist", artist, sizeof(artist));
+	DecodeHTMLEntities(artist, sizeof(artist));
+	info.GetString("title", songName, sizeof(songName));
+	DecodeHTMLEntities(songName, sizeof(songName));
+	Format(artist_song, sizeof(artist_song), "%s - %s", songName, artist);
 
-    // If szCurrentSong doesn't match the one that was just grabbed, update it and tell everyone that a new song is playing. 
-    if(!StrEqual(artist_song, szCurrentSong, false))
-    {
-        strcopy(szCurrentSong, sizeof(szCurrentSong), artist_song);
-        PrintToChatAll("\x01[\x04Hive365\x01] \x04Now Playing: %s", szCurrentSong);
-    }
+	// If szCurrentSong doesn't match the one that was just grabbed, update it and tell everyone that a new song is playing. 
+	if(!StrEqual(artist_song, szCurrentSong, false))
+	{
+		strcopy(szCurrentSong, sizeof(szCurrentSong), artist_song);
+		PrintToChatAll("\x01[\x04Hive365\x01] \x04Now Playing: %s", szCurrentSong);
+	}
 
-    // Pull DJ from the JSON.
-    info.GetString("streamer", streamer, sizeof(streamer));
-    DecodeHTMLEntities(streamer, sizeof(streamer));
-    
-    // If szCurrentDJ doesn't match the one that was just grabbed, update it and tell everyone who the recently grabbed DJ is.
-    if(!StrEqual(streamer, szCurrentDJ, false))
-    {
-        strcopy(szCurrentDJ, sizeof(szCurrentDJ), streamer);
-        stringmapDJFTW.Clear();
-        PrintToChatAll("\x01[\x04Hive365\x01] \x04Your DJ is: %s", szCurrentDJ);
-    }
+	// Pull DJ from the JSON.
+	info.GetString("streamer", streamer, sizeof(streamer));
+	DecodeHTMLEntities(streamer, sizeof(streamer));
+	
+	// If szCurrentDJ doesn't match the one that was just grabbed, update it and tell everyone who the recently grabbed DJ is.
+	if(!StrEqual(streamer, szCurrentDJ, false))
+	{
+		strcopy(szCurrentDJ, sizeof(szCurrentDJ), streamer);
+		stringmapDJFTW.Clear();
+		PrintToChatAll("\x01[\x04Hive365\x01] \x04Your DJ is: %s", szCurrentDJ);
+	}
 
-    //delete infoData;
+	//delete infoData;
 }
 
 /* 
@@ -729,11 +750,11 @@ void MakeHTTPRequest(RequestInfo requestType, int client, char [] buffer)
 		SendHTTPRequest("GET", requestType, "http-backend.hive365radio.com/streamInfo/simple", "", "", "");
 		return;
 	}
-    else if (requestType == RequestInfo_PublicIP)
-    {
-        SendHTTPRequest("GET", requestType, "http://api64.ipify.org/?format=json", "", "", "");
-        return;
-    }
+	else if (requestType == RequestInfo_PublicIP)
+	{
+		SendHTTPRequest("GET", requestType, "http://api64.ipify.org/?format=json", "", "", "");
+		return;
+	}
 	else
 	{
 		char szUsername[MAX_NAME_LENGTH];
@@ -747,23 +768,23 @@ void MakeHTTPRequest(RequestInfo requestType, int client, char [] buffer)
 		{
 			case RequestInfo_DjFtw:
 			{
-				SendHTTPRequest("POST", requestType, "http-backend.hive365radio.com/rating/streamer", szUsername, szHostname, "");
+				SendHTTPRequest("POST", requestType, "http-backend.hive365radio.com/rating/streamer", szUsername, szGameType, "");
 			}
 			case RequestInfo_SongRequest:
 			{
-				SendHTTPRequest("PUT", requestType, "http-backend.hive365radio.com/songrequest", szUsername, szHostname, buffer);
+				SendHTTPRequest("PUT", requestType, "http-backend.hive365radio.com/songrequest", szUsername, szGameType, buffer);
 			}
 			case RequestInfo_Shoutout:
 			{
-				SendHTTPRequest("PUT", requestType, "http-backend.hive365radio.com/shoutout", szUsername, szHostname, buffer);
+				SendHTTPRequest("PUT", requestType, "http-backend.hive365radio.com/shoutout", szUsername, szGameType, buffer);
 			}
 			case RequestInfo_Choon:
 			{
-				SendHTTPRequest("POST", requestType, "http-backend.hive365radio.com/rating/song", szUsername, szHostname, "CHOON");
+				SendHTTPRequest("POST", requestType, "http-backend.hive365radio.com/rating/song", szUsername, szGameType, "CHOON");
 			}
 			case RequestInfo_Poon:
 			{
-				SendHTTPRequest("POST", requestType, "http-backend.hive365radio.com/rating/song", szUsername, szHostname, "POON");
+				SendHTTPRequest("POST", requestType, "http-backend.hive365radio.com/rating/song", szUsername, szGameType, "POON");
 			}
 		}
 		return;
@@ -773,24 +794,24 @@ void MakeHTTPRequest(RequestInfo requestType, int client, char [] buffer)
 // This is the function run when SendHTTPRequest() is called and the request is made.
 void OnHTTPResponseReceived(HTTPResponse response, RequestInfo requestType)
 {
-    if (response.Status != HTTPStatus_OK && response.Status != HTTPStatus_Created) {
-        // Failed to send or retrieve data.
-        return;
-    }
+	if (response.Status != HTTPStatus_OK && response.Status != HTTPStatus_Created) {
+		// Failed to send or retrieve data.
+		return;
+	}
 
-    if (requestType == RequestInfo_Info)
-    {
-        // Only create a JSON object to parse if GET was used to grab current stream info
-        JSONObject responseData = view_as<JSONObject>(response.Data);
-        ParseSongDetails(responseData);
-        delete responseData;
-        return;
-    }
+	if (requestType == RequestInfo_Info)
+	{
+		// Only create a JSON object to parse if GET was used to grab current stream info
+		JSONObject responseData = view_as<JSONObject>(response.Data);
+		ParseSongDetails(responseData);
+		delete responseData;
+		return;
+	}
 	else if (requestType == RequestInfo_PublicIP)
 	{
-        JSONObject responseData = view_as<JSONObject>(response.Data);
-        responseData.GetString("ip", szHostIP, sizeof(szHostIP));
-        delete responseData;
-        return;
+		JSONObject responseData = view_as<JSONObject>(response.Data);
+		responseData.GetString("ip", szHostIP, sizeof(szHostIP));
+		delete responseData;
+		return;
 	}
 }
