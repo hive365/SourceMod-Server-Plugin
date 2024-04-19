@@ -159,6 +159,7 @@ public void OnPluginStart()
 		   
 	CreateTimer(HIVE_ADVERT_RATE, ShowAdvert, _, TIMER_REPEAT);
 	CreateTimer(INFO_REFRESH_RATE, GetStreamInfoTimer, _, TIMER_REPEAT);
+	CreateTimer(300.0, SendHeartbeat, _, TIMER_REPEAT)
 	
 	for(int i = 0; i <= MaxClients; i++)
 	{
@@ -221,7 +222,6 @@ public void HookShowInfo(ConVar convar, const char[] oldValue, const char[] newV
 public Action GetStreamInfoTimer(Handle timer)
 {
 	MakeHTTPRequest(RequestInfo_Info, 0, "");
-	MakeHTTPRequest(RequestInfo_HeartBeat, 0, "");
 	return Plugin_Continue;
 }
 
@@ -244,6 +244,12 @@ public Action HelpMessage(Handle timer, any serial)
 	{
 		PrintToChat(client, "\x01[\x04Hive365\x01] \x04This server is running Hive365 Radio type !radiohelp for Help!");
 	}
+	return Plugin_Continue;
+}
+
+public Action SendHeartbeat(Handle timer)
+{
+	MakeHTTPRequest(RequestInfo_HeartBeat, 0, "");
 	return Plugin_Continue;
 }
 
