@@ -34,8 +34,6 @@ Updater: https://forums.alliedmods.net/showthread.php?p=1570806
 
 You can install the Hive365 Plugin onto any source game server running sourcemod that supports the MOTD interface.
 
-* Flash Player must be installed and up to date
-
 * HTML MOTD must be enabled in game settings
 
 ### Instructions:
