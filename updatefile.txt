@@ -4,18 +4,19 @@
 	{
 		"Version"
 		{
-			"Latest"	"4.1.0"
+			"Latest"	"5.1.0"
 		}
 		
-		"Notes"	"More info @ www.hive365.radio. Changes in 4.1.0:"
+		"Notes"	"More info @ www.hive365.radio. Changes in 5.1.0:"
 	}
 	
 	"Files"
 	{
 		"Plugin"	"Path_SM/plugins/hive365radio.smx"
-		"Plugin"	"Path_SM/extensions/SteamWorks.ext.dll"
-		"Plugin"	"Path_SM/extensions/SteamWorks.ext.so"
-		"Plugin"	"Path_SM/extensions/socket.ext.dll"
-		"Plugin"	"Path_SM/extensions/socket.ext.so"
+		"Plugin"	"Path_SM/configs/ripext/ca-bundle.crt"
+		"Plugin"	"Path_SM/extensions/x64/rip.ext.so"
+		"Plugin"	"Path_SM/extensions/rip.ext.so"
+		"Plugin"	"Path_SM/extensions/x64/rip.ext.dll"
+		"Plugin"	"Path_SM/extensions/rip.ext.dll"
 	}
 }
