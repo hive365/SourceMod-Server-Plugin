@@ -660,6 +660,7 @@ void SendHTTPRequest(char [] requestMethod, RequestInfo requestInfoType, char []
 				inputtedJSON.SetString("directConnect", directConnect);
 				inputtedJSON.SetInt("currentPlayers", GetClientCount());
 				inputtedJSON.SetInt("maxPlayers", MaxClients);
+				inputtedJSON.SetBool("steam", true);
 			}
 			else if (requestInfoType == RequestInfo_SongRequest)
 			{
