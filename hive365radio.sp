@@ -1,21 +1,18 @@
 #include <sourcemod>
-#include <socket>
-#include <base64>
-#include <json>
-
+#include <ripext>
+		
 #undef REQUIRE_PLUGIN
 #include <updater>
 
-#define UPDATE_URL    "https://hive365.co.uk/plugin/updatefile.txt"
+#define UPDATE_URL    "https://raw.githubusercontent.com/hive365/SourceMod-Server-Plugin/master/updatefile.txt"
 
 #undef REQUIRE_EXTENSIONS
-#include <SteamWorks>
 
 #pragma semicolon 1
 #pragma newdecls required
 
 //Defines
-#define PLUGIN_VERSION	"5.0.0"
+#define PLUGIN_VERSION	"5.1.0"
 char RADIO_PLAYER_URL[] = "https://player.hive365.radio/minimal";
 #define DEFAULT_RADIO_VOLUME 20
 
@@ -31,8 +28,10 @@ Menu menuVolume;
 Menu menuTuned;
 
 //Tracked Information
-char szEncodedHostname[256];
-char szEncodedHostPort[16];
+char szGameType[256];
+char szHostPort[16];
+char szHostName[256];
+char szHostIP[32];
 char szCurrentSong[256];
 char szCurrentDJ[64];
 bool bIsTunedIn[MAXPLAYERS+1];
@@ -54,18 +53,17 @@ enum RadioOptions
 	Radio_Help,
 };
 
-enum SocketInfo
+enum RequestInfo
 {
-	SocketInfo_Info,
-	SocketInfo_Request,
-	SocketInfo_Shoutout,
-	SocketInfo_Choon,
-	SocketInfo_Poon,
-	SocketInfo_DjFtw,
-	SocketInfo_HeartBeat,
+	RequestInfo_Info,
+	RequestInfo_SongRequest,
+	RequestInfo_Shoutout,
+	RequestInfo_Choon,
+	RequestInfo_Poon,
+	RequestInfo_DjFtw,
+	RequestInfo_HeartBeat,
+	RequestInfo_PublicIP,
 };
-
-char szEncodedHostip[128] = "";
 
 public Plugin myinfo = 
 {
@@ -140,21 +138,14 @@ public void OnPluginStart()
 	menuHelp.Pagination = MENU_NO_PAGINATION;
 	menuHelp.ExitButton = true;
 	
-	ConVar hostname = FindConVar("hostname");
-	
-	if(hostname)
+	ConVar gametype = FindConVar("hostname"); // grab game type BEFORE hostname is set because it's stored there for some reason
+
+	if(gametype)
 	{
-		char szHostname[128];
-		hostname.GetString(szHostname, sizeof(szHostname));
-		EncodeBase64(szEncodedHostname, sizeof(szEncodedHostname), szHostname);
-		hostname.AddChangeHook(HookHostnameChange);
+		gametype.GetString(szGameType, sizeof(szGameType));
 	}
 	
-	char szPort[10];
-	FindConVar("hostport").GetString(szPort, sizeof(szPort));
-	EncodeBase64(szEncodedHostPort, sizeof(szEncodedHostPort), szPort);
-	
-	ConVar showInfo = FindConVar("host_info_show");//CS:GO Only... for now
+	ConVar showInfo = FindConVar("host_info_show"); //CS:GO Only... for now
 	if(showInfo)
 	{
 		if(showInfo.IntValue < 1)
@@ -163,11 +154,12 @@ public void OnPluginStart()
 		}
 		showInfo.AddChangeHook(HookShowInfo);
 	}
-	
-	MakeSocketRequest(SocketInfo_Info);
-	
+		   
+	MakeHTTPRequest(RequestInfo_Info, 0, "");
+		   
 	CreateTimer(HIVE_ADVERT_RATE, ShowAdvert, _, TIMER_REPEAT);
 	CreateTimer(INFO_REFRESH_RATE, GetStreamInfoTimer, _, TIMER_REPEAT);
+	CreateTimer(300.0, SendHeartbeat, _, TIMER_REPEAT);
 	
 	for(int i = 0; i <= MaxClients; i++)
 	{
@@ -180,12 +172,21 @@ public void OnPluginStart()
 	}
 }
 
+public void OnConfigsExecuted()
+{
+	ConVar hostname = FindConVar("hostname");
+	if(hostname)
+	{
+		hostname.GetString(szHostName, sizeof(szHostName)); // Grab server name AFTER it's set
+	}
+}
+
 public void OnLibraryAdded(const char[] name)
 {
-    if (StrEqual(name, "updater"))
-    {
-        Updater_AddPlugin(UPDATE_URL);
-    }
+	if (StrEqual(name, "updater"))
+	{
+		Updater_AddPlugin(UPDATE_URL);
+	}
 }
 
 public void OnMapStart()
@@ -194,7 +195,7 @@ public void OnMapStart()
 	stringmapRequest.Clear();
 	stringmapShoutout.Clear();
 	stringmapDJFTW.Clear();
-	MakeSocketRequest(SocketInfo_HeartBeat);
+	MakeHTTPRequest(RequestInfo_HeartBeat, 0, "");
 }
 
 public void OnClientDisconnect(int client)
@@ -209,11 +210,6 @@ public void OnClientPutInServer(int client)
 	CreateTimer(HELP_TIMER_DELAY, HelpMessage, serial, TIMER_FLAG_NO_MAPCHANGE);
 }
 
-public void HookHostnameChange(ConVar convar, const char[] oldValue, const char[] newValue)
-{
-	EncodeBase64(szEncodedHostname, sizeof(szEncodedHostname), newValue);
-}
-
 public void HookShowInfo(ConVar convar, const char[] oldValue, const char[] newValue)
 {
 	if(convar.IntValue < 1)
@@ -222,29 +218,10 @@ public void HookShowInfo(ConVar convar, const char[] oldValue, const char[] newV
 	}
 }
 
-public void SteamWorks_SteamServersConnected()
-{
-	if(GetFeatureStatus(FeatureType_Native, "SteamWorks_GetPublicIP") == FeatureStatus_Available)
-	{
-		int ipParts[4];
-		if(SteamWorks_GetPublicIP(ipParts))
-		{
-			char ip[20];
-			char encodedIP[128];
-			
-			Format(ip, sizeof(ip), "%i.%i.%i.%i", ipParts[0], ipParts[1], ipParts[2], ipParts[3]);
-			EncodeBase64(encodedIP, sizeof(encodedIP), ip);
-			
-			Format(szEncodedHostip, sizeof(szEncodedHostip), "&ip=%s", encodedIP);
-			MakeSocketRequest(SocketInfo_HeartBeat);
-		}
-	}
-}
-
 //Timer Handlers
 public Action GetStreamInfoTimer(Handle timer)
 {
-	MakeSocketRequest(SocketInfo_Info);
+	MakeHTTPRequest(RequestInfo_Info, 0, "");
 	return Plugin_Continue;
 }
 
@@ -270,6 +247,12 @@ public Action HelpMessage(Handle timer, any serial)
 	return Plugin_Continue;
 }
 
+public Action SendHeartbeat(Handle timer)
+{
+	MakeHTTPRequest(RequestInfo_HeartBeat, 0, "");
+	return Plugin_Continue;
+}
+
 //Command Handlers
 public Action Cmd_DjFtw(int client, int args)
 {
@@ -284,7 +267,7 @@ public Action Cmd_DjFtw(int client, int args)
 		return Plugin_Handled;
 	}
 	
-	MakeSocketRequest(SocketInfo_DjFtw, GetClientSerial(client));
+	MakeHTTPRequest(RequestInfo_DjFtw, client, "");
 	
 	return Plugin_Handled;
 }
@@ -313,7 +296,7 @@ public Action Cmd_Shoutout(int client, int args)
 	
 	if(strlen(buffer) > 3)
 	{
-		MakeSocketRequest(SocketInfo_Shoutout, GetClientSerial(client), buffer);
+		MakeHTTPRequest(RequestInfo_Shoutout, client, buffer);
 	}
 	
 	return Plugin_Handled;
@@ -334,7 +317,7 @@ public Action Cmd_Choon(int client, int args)
 	
 	PrintToChatAll("\x01[\x04Hive365\x01] \x04%N thinks that %s is a banging Choon!", client, szCurrentSong);
 	
-	MakeSocketRequest(SocketInfo_Choon, GetClientSerial(client));
+	MakeHTTPRequest(RequestInfo_Choon, client, "");
 	
 	return Plugin_Handled;
 }
@@ -354,7 +337,7 @@ public Action Cmd_Poon(int client, int args)
 	
 	PrintToChatAll("\x01[\x04Hive365\x01] \x04%N thinks that %s  is a bit of a naff Poon!", client, szCurrentSong);
 	
-	MakeSocketRequest(SocketInfo_Poon, GetClientSerial(client));
+	MakeHTTPRequest(RequestInfo_Poon, client, "");
 	
 	return Plugin_Handled;
 }
@@ -383,7 +366,7 @@ public Action Cmd_Request(int client, int args)
 	
 	if(strlen(buffer) > 3)
 	{
-		MakeSocketRequest(SocketInfo_Request, GetClientSerial(client), buffer);
+		MakeHTTPRequest(RequestInfo_SongRequest, client, buffer);
 	}
 	
 	return Plugin_Handled;
@@ -610,85 +593,7 @@ void LoadMOTDPanel(int client, const char [] title, const char [] page, bool dis
 	delete kv;
 }
 
-void MakeSocketRequest(SocketInfo type, int serial = 0, const char [] buffer = "")
-{
-	Handle socket = SocketCreate(SOCKET_TCP, OnSocketError);
-	
-	DataPack pack = CreateDataPack();
-	
-	pack.WriteCell(view_as<any>(type));
-	
-	if(type == SocketInfo_HeartBeat)
-	{
-		SocketSetArg(socket, pack);
-		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "data.hive365.co.uk", 80);
-		return;
-	}
-	else if(type != SocketInfo_Info)
-	{
-		pack.WriteCell(serial);
-		pack.WriteString(buffer);
-	}
-	
-	SocketSetArg(socket, pack);
-	
-	if(type == SocketInfo_Info)
-	{
-		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "legacydata.hive365radio.com", 80);
-	}
-	else
-	{
-		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "www.hive365.co.uk", 80);
-	}
-}
-
-void SendSocketRequest(Handle socket, char [] request, char [] host)
-{
-	char requestStr[2048];
-	Format(requestStr, sizeof(requestStr), "GET /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", request, host);
-	
-	SocketSend(socket, requestStr);
-}
-
-void ParseSocketInfo(char [] receivedData)
-{
-	char song[256] = "Unknown";
-	char dj[64] = "AutoDj";
-	
-	// //Get the actual json we need
-	int startOfJson = StrContains(receivedData, "{");
-
-
-	
-	if(startOfJson)
-	{
-		char JsonData[4096];
-		strcopy(JsonData, sizeof(JsonData), receivedData[startOfJson-1]);
-
-		JSON_Object JsonObject = json_decode(JsonData);
-		JSON_Object StreamInfo = JsonObject.GetObject("info");
-
-		StreamInfo.GetString("artist_song", song, sizeof(song));
-		DecodeHTMLEntities(song, sizeof(song));
-		if(!StrEqual(song, szCurrentSong, false))
-		{
-			strcopy(szCurrentSong, sizeof(szCurrentSong), song);
-			PrintToChatAll("\x01[\x04Hive365\x01] \x04Now Playing: %s", szCurrentSong);
-		}
-
-		StreamInfo.GetString("title", dj, sizeof(dj));
-		DecodeHTMLEntities(dj, sizeof(dj));
-		if(!StrEqual(dj, szCurrentDJ, false))
-		{
-			strcopy(szCurrentDJ, sizeof(szCurrentDJ), dj);
-			stringmapDJFTW.Clear();
-			PrintToChatAll("\x01[\x04Hive365\x01] \x04Your DJ is: %s", szCurrentDJ);
-		}
-
-		json_cleanup_and_delete(JsonObject);
-	}
-}
-
+// In the event that some nasty characters are attemting to be passed into a string, this decodes them.
 void DecodeHTMLEntities(char [] str, int size)
 {
 	static char htmlEnts[][][] = 
@@ -705,141 +610,224 @@ void DecodeHTMLEntities(char [] str, int size)
 	}
 }
 
-//Socket Handlers
-#pragma newdecls optional
-
-public OnSocketConnected(Handle socket, any pack) 
+/*
+This sends out the full HTTP Request using GET, PUT, or POST.
+@param requestMethod Either "GET", "PUT", or "POST" to tell the function which request to send.
+@param requestInfoType The RequestInfo type that will be used in order to determine names of JSON keys, like RequestInfo_Choon.
+@param urlRequest The URL that will be requested.
+@param name This will be the "name" that goes into the json.
+@param source This will be the "source" that goes into the json.
+@param message Most requests differ when it comes to this, so this will be that third miscellaneous key that will be translated based on the requestMethod.
+*/
+void SendHTTPRequest(char [] requestMethod, RequestInfo requestInfoType, char [] urlRequest, char [] name, char [] source, char [] message)
 {
-	char urlRequest[1024];
-	(view_as<DataPack>(pack)).Reset();
-	
-	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
-	
-	if(type == SocketInfo_HeartBeat)
+	HTTPRequest request = new HTTPRequest(urlRequest);
+		   
+	if (StrEqual(requestMethod, "GET")) 
 	{
-		char buffer[64];
-		
-		EncodeBase64(buffer, sizeof(buffer), PLUGIN_VERSION);
-		
-		Format(urlRequest, sizeof(urlRequest), "addServer.php?port=%s&version=%s", szEncodedHostPort, buffer);
-		
-		SendSocketRequest(socket, urlRequest, "data.hive365.co.uk");
+		request.Get(OnHTTPResponseReceived, requestInfoType);
 		return;
 	}
-	else if(type == SocketInfo_Info)
+	else
+	{   
+		// Only create the JSON to be inputted if requestMethod is not "GET"
+		JSONObject inputtedJSON = new JSONObject();
+		
+		if (StrEqual(requestMethod, "PUT"))
+		{
+			bool ipGrabSuccess;
+			if (requestInfoType == RequestInfo_HeartBeat)
+			{
+				char directConnect[64];
+
+				IntToString(GetConVarInt(FindConVar("hostport")), szHostPort, sizeof(szHostPort));
+
+				SendHTTPRequest("GET", RequestInfo_PublicIP, "http://api64.ipify.org/?format=json", "", "", "");
+				// Ensure that the IP is grabbed successfully.
+				if (!StrEqual(szHostIP, "") && !StrEqual(szHostIP, " ")) 
+				{
+					ipGrabSuccess = true;
+				} 
+				else 
+				{
+					ipGrabSuccess = false;
+				}
+				Format(directConnect, sizeof(directConnect), "%s:%s", szHostIP, szHostPort);
+
+				inputtedJSON.SetString("serverName", szHostName);
+				inputtedJSON.SetString("gameType", szGameType);
+				inputtedJSON.SetString("pluginVersion", PLUGIN_VERSION);
+				inputtedJSON.SetString("directConnect", directConnect);
+				inputtedJSON.SetInt("currentPlayers", GetClientCount());
+				inputtedJSON.SetInt("maxPlayers", MaxClients);
+				inputtedJSON.SetBool("steam", true);
+			}
+			else if (requestInfoType == RequestInfo_SongRequest)
+			{
+				inputtedJSON.SetString("name", name);
+				inputtedJSON.SetString("source", source);
+				inputtedJSON.SetString("songName", message);
+			}
+			else if (requestInfoType == RequestInfo_Shoutout)
+			{
+				inputtedJSON.SetString("name", name);
+				inputtedJSON.SetString("source", source);
+				inputtedJSON.SetString("message", message);
+			}
+
+			if (requestInfoType != RequestInfo_HeartBeat) 
+			{
+				request.Put(view_as<JSON>(inputtedJSON), OnHTTPResponseReceived, requestInfoType); // Request normally
+			}
+			else
+			{
+				if (ipGrabSuccess)
+				{
+					request.Put(view_as<JSON>(inputtedJSON), OnHTTPResponseReceived, requestInfoType); // Heartbeat request only if the IP was grabbed successfully
+				}
+			}
+		}
+		else if (StrEqual(requestMethod, "POST"))
+		{
+			if (requestInfoType == RequestInfo_DjFtw)
+			{
+				inputtedJSON.SetString("name", name);
+				inputtedJSON.SetString("source", source);
+			}
+			else if (requestInfoType == RequestInfo_Choon || requestInfoType == RequestInfo_Poon)
+			{
+				inputtedJSON.SetString("type", message);
+				inputtedJSON.SetString("name", name);
+				inputtedJSON.SetString("source", source);
+			}
+
+			request.Post(inputtedJSON, OnHTTPResponseReceived, requestInfoType);
+		}
+		delete inputtedJSON;
+		return;
+	}
+}
+
+// This parses the data received and places it into the corresponding globals, updating them and telling all users if necessary.
+void ParseSongDetails(JSONObject responseData)
+{
+	JSONObject info = new JSONObject();
+	info = view_as<JSONObject>(responseData.Get("info"));
+
+	char artist[128];
+	char songName[128];
+	char artist_song[256];
+	char streamer[64];
+
+	// Pull song and its artist from the JSON.
+	info.GetString("artist", artist, sizeof(artist));
+	DecodeHTMLEntities(artist, sizeof(artist));
+	info.GetString("title", songName, sizeof(songName));
+	DecodeHTMLEntities(songName, sizeof(songName));
+	Format(artist_song, sizeof(artist_song), "%s - %s", songName, artist);
+
+	// If szCurrentSong doesn't match the one that was just grabbed, update it and tell everyone that a new song is playing. 
+	if(!StrEqual(artist_song, szCurrentSong, false))
 	{
-		SendSocketRequest(socket, "data.php", "legacydata.hive365radio.com");
+		strcopy(szCurrentSong, sizeof(szCurrentSong), artist_song);
+		PrintToChatAll("\x01[\x04Hive365\x01] \x04Now Playing: %s", szCurrentSong);
+	}
+
+	// Pull DJ from the JSON.
+	info.GetString("streamer", streamer, sizeof(streamer));
+	DecodeHTMLEntities(streamer, sizeof(streamer));
+	
+	// If szCurrentDJ doesn't match the one that was just grabbed, update it and tell everyone who the recently grabbed DJ is.
+	if(!StrEqual(streamer, szCurrentDJ, false))
+	{
+		strcopy(szCurrentDJ, sizeof(szCurrentDJ), streamer);
+		stringmapDJFTW.Clear();
+		PrintToChatAll("\x01[\x04Hive365\x01] \x04Your DJ is: %s", szCurrentDJ);
+	}
+
+	//delete infoData;
+}
+
+/* 
+This is called by many Actions such as Cmd_Request() in order to send the right requests to the server according to what needs to be sent.
+@param requestType Tell the program which kind of request needs to be made.
+@param client The client index, to be used when necessary. Only matters when not dealing with Heartbeat or Info.
+@param buffer Many commands will have a "buffer" that will hold info passed into the command. !request <song> would have <song> stored as the buffer, and it should be passed here. 
+*/
+void MakeHTTPRequest(RequestInfo requestType, int client, char [] buffer)
+{
+	if(requestType == RequestInfo_HeartBeat)
+	{
+		SendHTTPRequest("PUT", requestType, "http-backend.hive365radio.com/gameserver", "", "", "");
+		return;
+	}
+	else if(requestType == RequestInfo_Info)
+	{
+		SendHTTPRequest("GET", requestType, "http-backend.hive365radio.com/streamInfo/simple", "", "", "");
+		return;
+	}
+	else if (requestType == RequestInfo_PublicIP)
+	{
+		SendHTTPRequest("GET", requestType, "http://api64.ipify.org/?format=json", "", "", "");
 		return;
 	}
 	else
 	{
-		int client = GetClientFromSerial((view_as<DataPack>(pack)).ReadCell());
-		char name[MAX_NAME_LENGTH];
-		char szEncodedName[128];
-		char szEncodedData[256];
+		char szUsername[MAX_NAME_LENGTH];
 
-		if(client == 0 || !IsClientInGame(client) || !GetClientName(client, name, sizeof(name)))
+		if(client == 0 || !IsClientInGame(client) || !GetClientName(client, szUsername, sizeof(szUsername)))
 		{
 			return;
 		}
 		
-		EncodeBase64(szEncodedName, sizeof(szEncodedName), name);
-		
-		if(type == SocketInfo_Request || type == SocketInfo_Shoutout || type == SocketInfo_DjFtw)
+		switch (requestType) 
 		{
-			if(type == SocketInfo_DjFtw)
+			case RequestInfo_DjFtw:
 			{
-				EncodeBase64(szEncodedData, sizeof(szEncodedData), szCurrentDJ);
+				SendHTTPRequest("POST", requestType, "http-backend.hive365radio.com/rating/streamer", szUsername, szGameType, "");
 			}
-			else
+			case RequestInfo_SongRequest:
 			{
-				char buffer[128];
-				
-				(view_as<DataPack>(pack)).ReadString(buffer, sizeof(buffer));
-				EncodeBase64(szEncodedData, sizeof(szEncodedData), buffer);
+				SendHTTPRequest("PUT", requestType, "http-backend.hive365radio.com/songrequest", szUsername, szGameType, buffer);
 			}
-			
-			if(type == SocketInfo_DjFtw)
+			case RequestInfo_Shoutout:
 			{
-				Format(urlRequest, sizeof(urlRequest), "plugin/djrate.php?n=%s&s=%s&host=%s", szEncodedName, szEncodedData, szEncodedHostname);
+				SendHTTPRequest("PUT", requestType, "http-backend.hive365radio.com/shoutout", szUsername, szGameType, buffer);
 			}
-			else if(type == SocketInfo_Shoutout)
+			case RequestInfo_Choon:
 			{
-				Format(urlRequest, sizeof(urlRequest), "plugin/shoutout.php?n=%s&s=%s&host=%s", szEncodedName, szEncodedData, szEncodedHostname);
+				SendHTTPRequest("POST", requestType, "http-backend.hive365radio.com/rating/song", szUsername, szGameType, "CHOON");
 			}
-			else
+			case RequestInfo_Poon:
 			{
-				Format(urlRequest, sizeof(urlRequest), "plugin/request.php?n=%s&s=%s&host=%s", szEncodedName, szEncodedData, szEncodedHostname);
+				SendHTTPRequest("POST", requestType, "http-backend.hive365radio.com/rating/song", szUsername, szGameType, "POON");
 			}
 		}
-		else if(type == SocketInfo_Choon)
-		{
-			Format(urlRequest, sizeof(urlRequest), "plugin/song_rate.php?n=%s&t=3&host=%s", szEncodedName, szEncodedHostname);
-		}
-		else if(type == SocketInfo_Poon)
-		{
-			Format(urlRequest, sizeof(urlRequest), "plugin/song_rate.php?n=%s&t=4&host=%s", szEncodedName, szEncodedHostname);
-		}
-		
-		SendSocketRequest(socket, urlRequest, "www.hive365.co.uk");
+		return;
+	}
+}
+
+// This is the function run when SendHTTPRequest() is called and the request is made.
+void OnHTTPResponseReceived(HTTPResponse response, RequestInfo requestType)
+{
+	if (response.Status != HTTPStatus_OK && response.Status != HTTPStatus_Created) {
+		// Failed to send or retrieve data.
 		return;
 	}
 
-}
-
-public OnSocketReceive(Handle socket, char [] receivedData, const int dataSize, any pack) 
-{
-	(view_as<DataPack>(pack)).Reset();
-	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
-	
-	if(type == SocketInfo_Info)
+	if (requestType == RequestInfo_Info)
 	{
-		ParseSocketInfo(receivedData);
+		// Only create a JSON object to parse if GET was used to grab current stream info
+		JSONObject responseData = view_as<JSONObject>(response.Data);
+		ParseSongDetails(responseData);
+		delete responseData;
+		return;
 	}
-}
-
-public OnSocketDisconnected(Handle socket, any pack) 
-{
-	(view_as<DataPack>(pack)).Reset();
-	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
-	
-	if(type == SocketInfo_Request || type == SocketInfo_Shoutout || type == SocketInfo_DjFtw)
+	else if (requestType == RequestInfo_PublicIP)
 	{
-		int client = GetClientFromSerial((view_as<DataPack>(pack)).ReadCell());
-		
-		if(client != 0 && IsClientInGame(client))
-		{
-			if(type == SocketInfo_DjFtw)
-			{
-				PrintToChatAll("\x01[\x04Hive365\x01] \x04%N thinks %s is a banging DJ!", client, szCurrentDJ);
-			}
-			else if(type == SocketInfo_Shoutout)
-			{
-				PrintToChat(client, "\x01[\x04Hive365\x01] \x04Your Shoutout has been sent!");
-			}
-			else
-			{
-				PrintToChat(client, "\x01[\x04Hive365\x01] \x04Your Request has been sent!");
-			}
-		}
+		JSONObject responseData = view_as<JSONObject>(response.Data);
+		responseData.GetString("ip", szHostIP, sizeof(szHostIP));
+		delete responseData;
+		return;
 	}
-	
-	delete view_as<DataPack>(pack);
-	delete socket;
-}
-
-public OnSocketError(Handle socket, const int errorType, const int errorNum, any pack) 
-{
-	(view_as<DataPack>(pack)).Reset();
-	SocketInfo type = view_as<SocketInfo>((view_as<DataPack>(pack)).ReadCell());
-	
-	if(type == SocketInfo_Info)
-	{
-		strcopy(szCurrentSong, sizeof(szCurrentSong), "Unknown");
-		strcopy(szCurrentDJ, sizeof(szCurrentDJ), "AutoDj");
-	}
-	LogError("[Hive365] socket error %d (errno %d)", errorType, errorNum);
-	
-	delete view_as<DataPack>(pack);
-	delete socket;
 }
