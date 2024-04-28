@@ -159,7 +159,7 @@ public void OnPluginStart()
 		   
 	CreateTimer(HIVE_ADVERT_RATE, ShowAdvert, _, TIMER_REPEAT);
 	CreateTimer(INFO_REFRESH_RATE, GetStreamInfoTimer, _, TIMER_REPEAT);
-	CreateTimer(300.0, SendHeartbeat, _, TIMER_REPEAT)
+	CreateTimer(300.0, SendHeartbeat, _, TIMER_REPEAT);
 	
 	for(int i = 0; i <= MaxClients; i++)
 	{
