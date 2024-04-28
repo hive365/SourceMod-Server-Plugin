@@ -3,7 +3,7 @@ SourceMod-Server-Plugin
 
 Hive365 Server Plugin for SourceMod
 
-Sourcemod Plugin v5.0.0
+Sourcemod Plugin v5.1.0
 ## Description
 * Supports sourcemod supported games.
 * Uses SourceMod's new syntax (requires: SM 1.11)
@@ -17,17 +17,13 @@ Sourcemod Plugin v5.0.0
 
 Please Report SM Plugin Bugs [Here](https://github.com/hive365/SourceMod-Server-Plugin/issues). Be sure to follow the issue template!
 
-**Note: SteamWorks Extension is used to ensure your game servers get listed on our servers page. If not listed, please ensure that SteamWorks Extension is running before submitting a bug report.**
-
 ## Plugin Credits
 
 The following dependencies are included in the Hive365 Plugin for which the Hive365 Team extend their gratitude and thanks;
 
-Socket Extension:
-Uses SourceMod's new syntax (requires SM 1.11)
-Base64 Include: http://forums.alliedmods.net/showthread.php?t=101764
-SteamWorks Extension: https://forums.alliedmods.net/showthread.php?t=229556
 
+Uses SourceMod's new syntax (requires SM 1.11)
+Uses RipEXT: https://forums.alliedmods.net/showthread.php?t=298024
 Updater: https://forums.alliedmods.net/showthread.php?p=1570806
 
 ## How to Install the Hive365 Sourcemod Plugin
@@ -38,7 +34,7 @@ You can install the Hive365 Plugin onto any source game server running sourcemod
 
 ### Instructions:
 
-1) Download and Extract 'Hive365Plugin_v5.0.0.zip' from the link provided
+1) Download and Extract 'Hive365Plugin_v5.1.0.zip' from the link provided
 
 2) Ensure that Sourcemod and Metamod Source are installed on your server
 
