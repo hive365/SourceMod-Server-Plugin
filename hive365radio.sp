@@ -6,7 +6,7 @@
 #undef REQUIRE_PLUGIN
 #include <updater>
 
-#define UPDATE_URL    "https://hive365.co.uk/plugin/updatefile.txt"
+#define UPDATE_URL    "https://raw.githubusercontent.com/hive365/SourceMod-Server-Plugin/v34/updatefile.txt"
 
 #undef REQUIRE_EXTENSIONS
 #include <SteamWorks>
@@ -15,8 +15,8 @@
 #pragma newdecls required
 
 //Defines
-#define PLUGIN_VERSION	"4.0.6"
-char RADIO_PLAYER_URL[] = "https://hive365.co.uk/plugin/player/player_manual.html";
+#define PLUGIN_VERSION	"5.1.0_v34"
+char RADIO_PLAYER_URL[] = "https://player.hive365.radio/minimal";
 #define DEFAULT_RADIO_VOLUME 20
 
 //Timer defines
@@ -70,10 +70,10 @@ char szEncodedHostip[128] = "";
 public Plugin myinfo = 
 {
 	name = "Hive365 Player",
-	author = "Hive365.co.uk",
+	author = "Hive365.radio",
 	description = "Hive365 In-Game Radio Player",
 	version = PLUGIN_VERSION,
-	url = "https://www.hive365.co.uk"
+	url = "https://www.hive365.radio"
 }
 
 public void OnPluginStart()
@@ -628,7 +628,7 @@ void MakeSocketRequest(SocketInfo type, int serial = 0, const char [] buffer = "
 	
 	if(type == SocketInfo_Info)
 	{
-		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "data.hive365.co.uk", 80);
+		SocketConnect(socket, OnSocketConnected, OnSocketReceive, OnSocketDisconnected, "legacydata.hive365radio.com", 80);
 	}
 	else
 	{
@@ -721,7 +721,7 @@ public OnSocketConnected(Handle socket, any pack)
 	}
 	else if(type == SocketInfo_Info)
 	{
-		SendSocketRequest(socket, "stream/info.php", "data.hive365.co.uk");
+		SendSocketRequest(socket, "data.php", "legacydata.hive365radio.com");
 		return;
 	}
 	else
@@ -774,7 +774,7 @@ public OnSocketConnected(Handle socket, any pack)
 			Format(urlRequest, sizeof(urlRequest), "plugin/song_rate.php?n=%s&t=4&host=%s", szEncodedName, szEncodedHostname);
 		}
 		
-		SendSocketRequest(socket, urlRequest, "www.hive365.co.uk");
+		SendSocketRequest(socket, urlRequest, "hive365.radio");
 		return;
 	}
 
