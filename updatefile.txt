@@ -7,7 +7,9 @@
 			"Latest"	"5.1.1"
 		}
 
-		"Notes"	"More info @ www.hive365.radio. Changes in 5.1.1:"
+		"Notes"	"More info @ www.hive365.radio"
+		"Notes"	"Source @ github.com/hive365/SourceMod-Server-Plugin"
+		"Notes"	"Changes in 5.1.1:"
 		"Notes"	"Fixed handle leaks while parsing JSON response"
 	}
 
@@ -19,7 +21,5 @@
 		"Plugin"	"Path_SM/extensions/rip.ext.so"
 		"Plugin"	"Path_SM/extensions/x64/rip.ext.dll"
 		"Plugin"	"Path_SM/extensions/rip.ext.dll"
-
-		"Source"	"Path_SM/scripting/hive365radio.sp"
 	}
 }
