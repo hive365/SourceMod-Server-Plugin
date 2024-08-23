@@ -12,7 +12,7 @@
 #pragma newdecls required
 
 //Defines
-#define PLUGIN_VERSION	"5.1.0"
+#define PLUGIN_VERSION	"5.1.1"
 char RADIO_PLAYER_URL[] = "https://player.hive365.radio/minimal";
 #define DEFAULT_RADIO_VOLUME 20
 
@@ -711,8 +711,7 @@ void SendHTTPRequest(char [] requestMethod, RequestInfo requestInfoType, char []
 // This parses the data received and places it into the corresponding globals, updating them and telling all users if necessary.
 void ParseSongDetails(JSONObject responseData)
 {
-	JSONObject info = new JSONObject();
-	info = view_as<JSONObject>(responseData.Get("info"));
+	JSONObject info = view_as<JSONObject>(responseData.Get("info"));
 
 	char artist[128];
 	char songName[128];
@@ -745,7 +744,7 @@ void ParseSongDetails(JSONObject responseData)
 		PrintToChatAll("\x01[\x04Hive365\x01] \x04Your DJ is: %s", szCurrentDJ);
 	}
 
-	//delete infoData;
+	delete info;
 }
 
 /* 
