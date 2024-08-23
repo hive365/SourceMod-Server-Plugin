@@ -4,12 +4,15 @@
 	{
 		"Version"
 		{
-			"Latest"	"5.1.0"
+			"Latest"	"5.1.1"
 		}
-		
-		"Notes"	"More info @ www.hive365.radio. Changes in 5.1.0:"
+
+		"Notes"	"More info @ www.hive365.radio"
+		"Notes"	"Source @ github.com/hive365/SourceMod-Server-Plugin"
+		"Notes"	"Changes in 5.1.1:"
+		"Notes"	"Fixed handle leaks while parsing JSON response"
 	}
-	
+
 	"Files"
 	{
 		"Plugin"	"Path_SM/plugins/hive365radio.smx"
